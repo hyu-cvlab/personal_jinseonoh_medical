@@ -152,21 +152,7 @@ def train(args, snapshot_path):
 
     def create_model(ema=False):
         # Network definition
-        #denseUnet_3D = Attention_UNet(n_classes=num_classes, in_channels= 1)
-        #model = unet_3D(n_classes=num_classes, in_channels=1)       #기존 unet
-        #model = VNet(n_channels=1, n_classes=num_classes, normalization='batchnorm', has_dropout=True, aggM_kernel= args.aggKernel)    # 기존 vnet
         model = VNet(n_channels=1, n_classes=num_classes, normalization='batchnorm', has_dropout=True)
-        '''
-        model = AttentionUnet(
-            spatial_dims = 3  ,
-            in_channels = 1 ,
-            out_channels = num_classes,
-            channels = [16,32,64,128],
-            strides = [1,1,1,1],
-            #kernel_size: Union[Sequence[int], int] = 3,
-            #up_kernel_size: Union[Sequence[int], int] = 3,
-            dropout = 0.5,)
-        '''
         if ema:
             for param in model.parameters():
                 param.detach_()
@@ -320,10 +306,10 @@ def train(args, snapshot_path):
 
             iter_num = iter_num + 1
 
-
+            
             writer.add_scalar('lr', lr_, iter_num)
             writer.add_scalar('loss/supervised_loss',
-                              loss, iter_num)
+                              loss.data.item(), iter_num)  # .data.item()이랑 .item()이랑 비교해보기
 
             wandb.log({
                 "iter": iter_num,
@@ -380,6 +366,9 @@ def train(args, snapshot_path):
             if iter_num >= max_iterations:
                 break
             time1 = time.time()
+            # Release GPU memory
+            torch.cuda.empty_cache()
+            
         if iter_num >= max_iterations:
             iterator.close()
             break
