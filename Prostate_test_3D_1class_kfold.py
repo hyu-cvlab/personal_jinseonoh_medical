@@ -62,7 +62,7 @@ def Inference(args,device):
     if args.class_name == 1:
 #         snapshot_path = "/data/sohui/Prostate/prostate_1c_train_result/{}/{}".format(args.exp, args.model)
         #snapshot_path = "/data/sohui/BraTS/data/brats_2class_train_result/BraTs19_label_40_290/{}/{}".format(args.exp, args.model)
-        snapshot_path = "/data/hanyang_Prostate/Prostate/prostate_1c_train_result/{}/{}_{}_fold{}".format(args.exp, args.model)
+        snapshot_path = "/data/hanyang_Prostate/Prostate/prostate_1c_train_result/{}/{}".format(args.exp, args.model)
     elif args.class_name == 2:
 #         snapshot_path = "/data/sohui/Prostate/TZ_1c_train_result/{}/{}".format(args.exp, args.model)
         snapshot_path = "/data/hanyang_Prostate/Prostate/TZ_1c_train_result/{}/{}".format(args.exp, args.model)
@@ -86,9 +86,18 @@ def Inference(args,device):
         net = net.cuda()
 
     save_mode_path = os.path.join(
-        snapshot_path, 'model_iter_13200_dice_0.8742.pth')#'iter_10000_dice_0.7169.pth')
+        snapshot_path, 'model_iter_10400_dice_0.8788.pth')#'iter_10000_dice_0.7169.pth')
 
-    net.load_state_dict(torch.load(save_mode_path))
+#     net.load_state_dict(torch.load(save_mode_path))
+    checkpoint = torch.load(save_mode_path)#["state_dict"]
+    
+    for key in list(checkpoint.keys()):
+        if 'module.' in key:
+            checkpoint[key.replace('module.','')] = checkpoint[key]
+            del checkpoint[key]
+            
+    net.load_state_dict(checkpoint, strict=False)
+    
     print("init weight from {}".format(save_mode_path))
     net.eval()
     metric, dice_list,jacc_list, hd_list, ASD_list = test_all_case(net, val_loader =val_loader, val_files=val_files, method=args.model, num_classes=num_classes,

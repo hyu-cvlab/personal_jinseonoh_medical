@@ -1,6 +1,6 @@
 import math
 
-import h5py
+# import h5py
 import nibabel as nib
 import numpy as np
 import SimpleITK as sitk
