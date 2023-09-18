@@ -44,10 +44,10 @@ def Inference(args,device):
     )
 
     if args.class_name == 1:
-        datasets = args.root_path + "/dataset_fold{}.json".format(args.fold)
+        datasets = args.root_path + "/dataset.json"
         print("total_prostate train : dataset.json")
     if args.class_name == 2:
-        datasets = args.root_path + "/dataset_2_fold{}.json".format(args.fold)
+        datasets = args.root_path + "/dataset_2.json"
         print("transition zone train :dataset_2.json")
 
     val_files = load_decathlon_datalist(datasets, True, "test")
@@ -60,20 +60,16 @@ def Inference(args,device):
     )
 
     if args.class_name == 1:
-#         snapshot_path = "/data/sohui/Prostate/prostate_1c_train_result/{}/{}".format(args.exp, args.model)
+        snapshot_path = "/data/sohui/Prostate/prostate_1c_train_result/{}/{}".format(args.exp, args.model)
         #snapshot_path = "/data/sohui/BraTS/data/brats_2class_train_result/BraTs19_label_40_290/{}/{}".format(args.exp, args.model)
-        snapshot_path = "/data/hanyang_Prostate/Prostate/prostate_1c_train_result/{}/{}".format(args.exp, args.model)
     elif args.class_name == 2:
-#         snapshot_path = "/data/sohui/Prostate/TZ_1c_train_result/{}/{}".format(args.exp, args.model)
-        snapshot_path = "/data/hanyang_Prostate/Prostate/TZ_1c_train_result/{}/{}".format(args.exp, args.model)
+        snapshot_path = "/data/sohui/Prostate/TZ_1c_train_result/{}/{}".format(args.exp, args.model)
     num_classes = args.num_classes
 
     if args.class_name == 1:
-#         test_save_path = "/data/sohui/Prostate/prostate_1c_test_result/{}/{}".format(args.exp, args.model)
-        test_save_path = "/data/hanyang_Prostate/Prostate/prostate_1c_test_result/{}/{}".format(args.exp, args.model)
+        test_save_path = "/data/sohui/Prostate/prostate_1c_test_result/{}/{}".format(args.exp, args.model)
     elif args.class_name == 2:
-#         test_save_path = "/data/sohui/Prostate/TZ_1c_test_result/{}/{}".format(args.exp, args.model)
-        test_save_path = "/data/hanyang_Prostate/Prostate/TZ_1c_test_result/{}/{}".format(args.exp, args.model)
+        test_save_path = "/data/sohui/Prostate/TZ_1c_test_result/{}/{}".format(args.exp, args.model)
 
     if os.path.exists(test_save_path):
         shutil.rmtree(test_save_path)
@@ -86,18 +82,9 @@ def Inference(args,device):
         net = net.cuda()
 
     save_mode_path = os.path.join(
-        snapshot_path, 'model_iter_7200_dice_0.8735.pth')#'iter_10000_dice_0.7169.pth')
+        snapshot_path, 'iter_6000_dice_0.8371.pth')
 
-#     net.load_state_dict(torch.load(save_mode_path))
-    checkpoint = torch.load(save_mode_path)#["state_dict"]
-    
-    for key in list(checkpoint.keys()):
-        if 'module.' in key:
-            checkpoint[key.replace('module.','')] = checkpoint[key]
-            del checkpoint[key]
-            
-    net.load_state_dict(checkpoint, strict=False)
-    
+    net.load_state_dict(torch.load(save_mode_path))
     print("init weight from {}".format(save_mode_path))
     net.eval()
     metric, dice_list,jacc_list, hd_list, ASD_list = test_all_case(net, val_loader =val_loader, val_files=val_files, method=args.model, num_classes=num_classes,
@@ -110,12 +97,11 @@ def Inference(args,device):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--root_path', type=str,
-#                         default='/data/sohui/Prostate/data/trim/ssl_data/centerCrop_200', help='Name of Experiment')
-                        default='/data/hanyang_Prostate/50_example/trim/ssl_data/centerCrop_200', help='Name of Experiment')
+                        default='/data/sohui/Prostate/data/trim/ssl_data/centerCrop_200', help='Name of Experiment')
     parser.add_argument('--exp', type=str,
                         default='SSL/MT_ATO_350_350_200_rampup_refpaper', help='experiment_name')
     parser.add_argument('--model', type=str,
-                        default='Vnet_3D_256_randomCrop_30000_fold3', help='model_name')
+                        default='Vnet_3D_256_randomCrop_30000_fold2', help='model_name')
     parser.add_argument('--max_iterations', type=int,
                         default=30000, help='maximum epoch number to train')
     parser.add_argument('--patch_size', type=list, default=[256,256,128],
@@ -128,8 +114,6 @@ if __name__ == '__main__':
     parser.add_argument('--nms', type=int, default=0,
                         help='apply NMS post-procssing?')
     parser.add_argument('--class_name', type=int, default=1)
-    parser.add_argument('--fold', type=int, default=3, help='k fold cross validation')
-
     args = parser.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"

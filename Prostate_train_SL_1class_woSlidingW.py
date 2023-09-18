@@ -77,7 +77,7 @@ parser.add_argument('--deterministic', type=int,  default=1,
                     help='whether use deterministic training')
 parser.add_argument('--base_lr', type=float,  default=0.01,
                     help='segmentation network learning rate')
-parser.add_argument('--patch_size', type=list,  default=[272,272,144],
+parser.add_argument('--patch_size', type=list,  default=[256,256,128],
                     help='patch size of network input')
 parser.add_argument('--seed', type=int,  default=1337, help='random seed')
 parser.add_argument('--num_classes', type=int,  default=2,
@@ -182,7 +182,7 @@ def train(args, snapshot_path):
                 pixdim=(0.8,0.8,0.8),
                 mode=("bilinear", "nearest"),
             ),
-            RandSpatialCropd(keys=['image', 'label'], roi_size=(272,272,144), random_size=False),
+            RandSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128), random_size=False),#roi_size=(272,272,144), random_size=False),
             RandFlipd(
                 keys=["image", "label"],
                 spatial_axis=[0],
