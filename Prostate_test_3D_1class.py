@@ -44,13 +44,13 @@ def Inference(args,device):
     )
 
     if args.class_name == 1:
-        datasets = args.root_path + "/dataset.json"
+        datasets = args.root_path + "/dataset_fold_testjinjin.json"
         print("total_prostate train : dataset.json")
     if args.class_name == 2:
         datasets = args.root_path + "/dataset_2.json"
         print("transition zone train :dataset_2.json")
 
-    val_files = load_decathlon_datalist(datasets, True, "test")
+    val_files = load_decathlon_datalist(datasets, True, "training")
 
     db_val = CacheDataset(
         data=val_files, transform=val_transforms, cache_num=6, cache_rate=1.0, num_workers=4
@@ -60,16 +60,21 @@ def Inference(args,device):
     )
 
     if args.class_name == 1:
-        snapshot_path = "/data/sohui/Prostate/prostate_1c_train_result/{}/{}".format(args.exp, args.model)
+#         snapshot_path = "/data/sohui/Prostate/prostate_1c_train_result/{}/{}".format(args.exp, args.model)
         #snapshot_path = "/data/sohui/BraTS/data/brats_2class_train_result/BraTs19_label_40_290/{}/{}".format(args.exp, args.model)
-    elif args.class_name == 2:
-        snapshot_path = "/data/sohui/Prostate/TZ_1c_train_result/{}/{}".format(args.exp, args.model)
-    num_classes = args.num_classes
+        snapshot_path = "/data/hanyang_Prostate/Prostate/prostate_1c_train_result/{}/{}".format(args.exp, args.model)
 
-    if args.class_name == 1:
-        test_save_path = "/data/sohui/Prostate/prostate_1c_test_result/{}/{}".format(args.exp, args.model)
     elif args.class_name == 2:
-        test_save_path = "/data/sohui/Prostate/TZ_1c_test_result/{}/{}".format(args.exp, args.model)
+#         snapshot_path = "/data/sohui/Prostate/TZ_1c_train_result/{}/{}".format(args.exp, args.model)
+        snapshot_path = "/data/hanyang_Prostate/Prostate/TZ_1c_train_result/{}/{}".format(args.exp, args.model)
+    num_classes = args.num_classes
+    
+    if args.class_name == 1:
+#         test_save_path = "/data/sohui/Prostate/prostate_1c_test_result/{}/{}".format(args.exp, args.model)
+        test_save_path = "/data/hanyang_Prostate/Prostate/prostate_1c_test_result/{}/{}".format(args.exp, args.model)
+    elif args.class_name == 2:
+#         test_save_path = "/data/sohui/Prostate/TZ_1c_test_result/{}/{}".format(args.exp, args.model)
+        test_save_path = "/data/hanyang_Prostate/Prostate/TZ_1c_test_result/{}/{}".format(args.exp, args.model)
 
     if os.path.exists(test_save_path):
         shutil.rmtree(test_save_path)
@@ -82,9 +87,18 @@ def Inference(args,device):
         net = net.cuda()
 
     save_mode_path = os.path.join(
-        snapshot_path, 'iter_6000_dice_0.8371.pth')
+        snapshot_path, 'model_iter_22000_dice_0.8866.pth')
 
-    net.load_state_dict(torch.load(save_mode_path))
+#     net.load_state_dict(torch.load(save_mode_path))
+    checkpoint = torch.load(save_mode_path)#["state_dict"]
+    
+    for key in list(checkpoint.keys()):
+        if 'module.' in key:
+            checkpoint[key.replace('module.','')] = checkpoint[key]
+            del checkpoint[key]
+            
+    net.load_state_dict(checkpoint, strict=False)
+
     print("init weight from {}".format(save_mode_path))
     net.eval()
     metric, dice_list,jacc_list, hd_list, ASD_list = test_all_case(net, val_loader =val_loader, val_files=val_files, method=args.model, num_classes=num_classes,
@@ -97,7 +111,8 @@ def Inference(args,device):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--root_path', type=str,
-                        default='/data/sohui/Prostate/data/trim/ssl_data/centerCrop_200', help='Name of Experiment')
+#                         default='/data/sohui/Prostate/data/trim/ssl_data/centerCrop_200', help='Name of Experiment')
+                        default='/data/hanyang_Prostate/50_example/trim/sl_data/centerCrop_350_350_200', help='Name of Experiment')
     parser.add_argument('--exp', type=str,
                         default='SSL/MT_ATO_350_350_200_rampup_refpaper', help='experiment_name')
     parser.add_argument('--model', type=str,
