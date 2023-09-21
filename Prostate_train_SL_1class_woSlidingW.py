@@ -220,15 +220,21 @@ def train(args, snapshot_path):
         ]
     )
 
-
-    if args.class_name == 1 :
-        datasets = args.root_path + "/dataset_fold{}.json".format(fold)
-        print("total_prostate train : dataset.json")
-    if args.class_name == 2:
-        datasets = args.root_path + "/dataset_2_fold{}.json".format(fold)
-        print("transition zone train :dataset_2.json")
+    datasets = args.root_path + "/dataset_fold{}.json".format(fold)
+    print("total_prostate train : dataset.json")
+#     if args.class_name == 1 :
+#         datasets = args.root_path + "/dataset_fold{}.json".format(fold)
+#         print("total_prostate train : dataset.json")
+#     if args.class_name == 2:
+#         datasets = args.root_path + "/dataset_2_fold{}.json".format(fold)
+#         print("transition zone train :dataset_2.json")
     train_files = load_decathlon_datalist(datasets, True, "training")      
     val_files = load_decathlon_datalist(datasets, True, "test")
+    # '/label_trim/'을 '/label_2_trim/'으로 치환
+    for file_info in train_files:
+        file_info['label'] = file_info['label'].replace('/label_trim/', '/label_2_trim/')
+    for file_info in val_files:
+        file_info['label'] = file_info['label'].replace('/label_trim/', '/label_2_trim/')
 
 
     ##########train dataload

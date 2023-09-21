@@ -33,11 +33,11 @@ def Inference(args,device):
             LoadImaged(keys=["image", "label"]),
             EnsureChannelFirstd(keys=["image", "label"]),
             Orientationd(keys=["image", "label"], axcodes="RAI"),   #LPS ->
-            Spacingd(
-                keys=["image", "label"],
-                pixdim=(0.8,0.8,0.8),
-                mode=("bilinear", "nearest"),
-            ),
+#             Spacingd(
+#                 keys=["image", "label"],
+#                 pixdim=(0.8,0.8,0.8),
+#                 mode=("bilinear", "nearest"),
+#             ),
             #CenterSpatialCropd(keys=['image', 'label'], roi_size=(176,176,176)),
             #SpatialPadd(keys=["image", "label"], spatial_size=(320, 320, 32), mode="constant"),
         ]
@@ -86,7 +86,7 @@ def Inference(args,device):
         net = net.cuda()
 
     save_mode_path = os.path.join(
-        snapshot_path, 'model_iter_7200_dice_0.8735.pth')#'iter_10000_dice_0.7169.pth')
+        snapshot_path, 'model_iter_6000_dice_0.8827.pth')#'iter_10000_dice_0.7169.pth')
 
 #     net.load_state_dict(torch.load(save_mode_path))
     checkpoint = torch.load(save_mode_path)#["state_dict"]
