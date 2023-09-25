@@ -97,7 +97,7 @@ def cal_metric(gt, pred):
         return np.zeros(2)
 
 
-def test_all_case(net, val_loader,val_files, method="unet_3D", num_classes=4, patch_size=(48, 160, 160), stride_xy=32, stride_z=24, save_result=True, test_save_path=None, metric_detail=0 , nms=0):
+def test_all_case(net, val_loader,val_files, method="unet_3D", num_classes=4, patch_size=(48, 160, 160), stride_xy=32, stride_z=24, save_result=True, test_save_path=None, metric_detail=0 , nms=0, mask_voxel_counts=[], pixel_spacing_xs=[] ,pixel_spacing_ys=[], slice_gaps=[]):
 
     total_metric = np.zeros((num_classes-1, 4))
     print("Testing begin")
@@ -174,17 +174,33 @@ def test_all_case(net, val_loader,val_files, method="unet_3D", num_classes=4, pa
 
 
                 pred_itk = sitk.GetImageFromArray(prediction.astype(np.uint8))
-                pred_itk.SetSpacing((0.8 ,0.8 ,0.8))
+                if len(pixel_spacing_xs) > 0:
+#                     print(type(pixel_spacing_xs[j]))
+#                     print(pixel_spacing_xs[j])
+#                     print(type(pixel_spacing_ys[j]))
+#                     print(pixel_spacing_ys[j])
+#                     print(type(slice_gaps[j]))
+#                     print(slice_gaps[j])
+                    
+                    pred_itk.SetSpacing((pixel_spacing_xs[j].item(),pixel_spacing_ys[j].item(),slice_gaps[j].item()))
+                else:
+                    pred_itk.SetSpacing((0.8 ,0.8 ,0.8))
                 sitk.WriteImage(pred_itk, test_save_path +
                                 "/{}_{}_pred.nii.gz".format(ith,name[:11]))
                 
                 img_itk = sitk.GetImageFromArray(image)
-                img_itk.SetSpacing((0.8 ,0.8 ,0.8))
+                if len(pixel_spacing_xs) > 0:
+                    pred_itk.SetSpacing((pixel_spacing_xs[j].item(),pixel_spacing_ys[j].item(),slice_gaps[j].item()))
+                else:
+                    pred_itk.SetSpacing((0.8 ,0.8 ,0.8))
                 sitk.WriteImage(img_itk, test_save_path +
                                 "/{}_{}_img.nii.gz".format(ith,name[:11]))
 
                 lab_itk = sitk.GetImageFromArray(label.astype(np.uint8))
-                lab_itk.SetSpacing((0.8 ,0.8 ,0.8))
+                if len(pixel_spacing_xs) > 0:
+                    pred_itk.SetSpacing((pixel_spacing_xs[j].item(),pixel_spacing_ys[j].item(),slice_gaps[j].item()))
+                else:
+                    pred_itk.SetSpacing((0.8 ,0.8 ,0.8))
                 sitk.WriteImage(lab_itk, test_save_path +
                                 "/{}_{}_gt.nii.gz".format(ith,name[:11]))
 

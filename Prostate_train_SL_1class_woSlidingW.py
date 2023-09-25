@@ -230,11 +230,15 @@ def train(args, snapshot_path):
 #         print("transition zone train :dataset_2.json")
     train_files = load_decathlon_datalist(datasets, True, "training")      
     val_files = load_decathlon_datalist(datasets, True, "test")
-    # '/label_trim/'을 '/label_2_trim/'으로 치환
-    for file_info in train_files:
-        file_info['label'] = file_info['label'].replace('/label_trim/', '/label_2_trim/')
-    for file_info in val_files:
-        file_info['label'] = file_info['label'].replace('/label_trim/', '/label_2_trim/')
+
+    if args.class_name == 1:
+        pass
+    if args.class_name == 2:
+        # '/label_trim/'을 '/label_2_trim/'으로 치환
+        for file_info in train_files:
+            file_info['label'] = file_info['label'].replace('/label_trim/', '/label_2_trim/')
+        for file_info in val_files:
+            file_info['label'] = file_info['label'].replace('/label_trim/', '/label_2_trim/')
 
 
     ##########train dataload

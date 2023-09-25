@@ -6,7 +6,7 @@ import torch
 from networks.vnet import VNet
 from Prostate_test_3D_util import test_all_case
 import torch.nn as nn
-
+import nibabel as nib
 
 from monai.transforms import (
     EnsureChannelFirstd,
@@ -25,7 +25,18 @@ from monai.data import (
     load_decathlon_datalist,
 )
 
+def read_nifti_spacing_and_mask_count(nifti_file_path):
+    try:
+        # NIfTI 파일 열기
+        img = nib.load(nifti_file_path)
 
+        # spacing 정보 추출
+        spacing = img.header.get_zooms()
+        mask_voxel_count = np.count_nonzero(img.get_fdata()!=0)
+        return mask_voxel_count, spacing[0], spacing[1], spacing[2]
+    except Exception as e:
+        print(f"Error reading NIfTI file: {str(e)}")
+        return None
 
 def Inference(args,device):
     val_transforms = Compose(
@@ -43,12 +54,25 @@ def Inference(args,device):
         ]
     )
 
+    datasets = args.root_path + "/dataset_fold{}.json".format(args.fold)
+#     print("total_prostate train : dataset.json")
+#     if args.class_name == 1 :
+#         datasets = args.root_path + "/dataset_fold{}.json".format(args.fold)
+#         print("total_prostate train : dataset.json")
+#     if args.class_name == 2:
+#         datasets = args.root_path + "/dataset_2_fold{}.json".format(args.fold)
+#         print("transition zone train :dataset_2.json")
+    train_files = load_decathlon_datalist(datasets, True, "training")      
+    val_files = load_decathlon_datalist(datasets, True, "test")
+
     if args.class_name == 1:
-        datasets = args.root_path + "/dataset_fold{}.json".format(args.fold)
-        print("total_prostate train : dataset.json")
+        pass
     if args.class_name == 2:
-        datasets = args.root_path + "/dataset_2_fold{}.json".format(args.fold)
-        print("transition zone train :dataset_2.json")
+        # '/label_trim/'을 '/label_2_trim/'으로 치환
+        for file_info in train_files:
+            file_info['label'] = file_info['label'].replace('/label_trim/', '/label_2_trim/')
+        for file_info in val_files:
+            file_info['label'] = file_info['label'].replace('/label_trim/', '/label_2_trim/')
 
     val_files = load_decathlon_datalist(datasets, True, "test")
 
@@ -58,6 +82,28 @@ def Inference(args,device):
     val_loader = DataLoader(
         db_val, batch_size=1, shuffle=False, num_workers=4, pin_memory=True
     )
+    
+    directory_path = "/data/hanyang_Prostate/50_example/trim/sl_data/centerCrop_350_350_200/label_trim/"
+    mask_voxel_counts = []
+    pixel_spacing_xs = []
+    pixel_spacing_ys = []
+    slice_gaps = []
+    for _ in range(len(db_val)):
+        no = db_val[_]['label_meta_dict']['filename_or_obj'].split('/')[-1][:8]
+
+        original_nifti_file_path=''
+        # 디렉토리 탐색
+        for root, dirs, files in os.walk(directory_path):
+            for file in files:
+                if no in file:
+                    # 검색한 문자열을 포함한 파일의 전체 경로 출력
+                    original_nifti_file_path = os.path.join(root, file)
+        mask_voxel_count, pixel_spacing_x, pixel_spacing_y, slice_gap = read_nifti_spacing_and_mask_count(original_nifti_file_path)
+        mask_voxel_counts.append(mask_voxel_count)
+        pixel_spacing_xs.append(pixel_spacing_x)
+        pixel_spacing_ys.append(pixel_spacing_y)
+        slice_gaps.append(slice_gap)
+
 
     if args.class_name == 1:
 #         snapshot_path = "/data/sohui/Prostate/prostate_1c_train_result/{}/{}".format(args.exp, args.model)
@@ -102,7 +148,7 @@ def Inference(args,device):
     net.eval()
     metric, dice_list,jacc_list, hd_list, ASD_list = test_all_case(net, val_loader =val_loader, val_files=val_files, method=args.model, num_classes=num_classes,
                                patch_size=args.patch_size, stride_xy=64, stride_z=64, save_result=True, test_save_path=test_save_path,
-                               metric_detail=args.detail,nms=args.nms)
+                               metric_detail=args.detail,nms=args.nms, mask_voxel_counts=mask_voxel_counts, pixel_spacing_xs=pixel_spacing_xs, pixel_spacing_ys=pixel_spacing_ys, slice_gaps=slice_gaps)
 
     return metric, dice_list,jacc_list, hd_list, ASD_list
 
