@@ -44,12 +44,12 @@ def Inference(args,device):
             LoadImaged(keys=["image", "label"]),
             EnsureChannelFirstd(keys=["image", "label"]),
             Orientationd(keys=["image", "label"], axcodes="RAI"),   #LPS ->
-#             Spacingd(
-#                 keys=["image", "label"],
-#                 pixdim=(0.8,0.8,0.8),
-#                 mode=("bilinear", "nearest"),
-#             ),
-            #CenterSpatialCropd(keys=['image', 'label'], roi_size=(176,176,176)),
+            Spacingd(
+                keys=["image", "label"],
+                pixdim=(0.8,0.8,0.8),
+                mode=("bilinear", "nearest"),
+            ),
+            CenterSpatialCropd(keys=['image', 'label'], roi_size=(176,176,128)),
             #SpatialPadd(keys=["image", "label"], spatial_size=(320, 320, 32), mode="constant"),
         ]
     )
@@ -62,19 +62,19 @@ def Inference(args,device):
 #     if args.class_name == 2:
 #         datasets = args.root_path + "/dataset_2_fold{}.json".format(args.fold)
 #         print("transition zone train :dataset_2.json")
-    train_files = load_decathlon_datalist(datasets, True, "training")      
-    val_files = load_decathlon_datalist(datasets, True, "test")
+#     train_files = load_decathlon_datalist(datasets, True, "training")      
+    val_files = load_decathlon_datalist(datasets, True, args.phase)
 
     if args.class_name == 1:
         pass
     if args.class_name == 2:
         # '/label_trim/'을 '/label_2_trim/'으로 치환
-        for file_info in train_files:
-            file_info['label'] = file_info['label'].replace('/label_trim/', '/label_2_trim/')
+#         for file_info in train_files:
+#             file_info['label'] = file_info['label'].replace('/label_trim/', '/label_2_trim/')
         for file_info in val_files:
             file_info['label'] = file_info['label'].replace('/label_trim/', '/label_2_trim/')
 
-    val_files = load_decathlon_datalist(datasets, True, "test")
+#     val_files = load_decathlon_datalist(datasets, True, args.phase)
 
     db_val = CacheDataset(
         data=val_files, transform=val_transforms, cache_num=6, cache_rate=1.0, num_workers=4
@@ -88,21 +88,22 @@ def Inference(args,device):
     pixel_spacing_xs = []
     pixel_spacing_ys = []
     slice_gaps = []
-    for _ in range(len(db_val)):
-        no = db_val[_]['label_meta_dict']['filename_or_obj'].split('/')[-1][:8]
+    if args.origin_spacing:
+        for _ in range(len(db_val)):
+            no = db_val[_]['label_meta_dict']['filename_or_obj'].split('/')[-1][:8]
 
-        original_nifti_file_path=''
-        # 디렉토리 탐색
-        for root, dirs, files in os.walk(directory_path):
-            for file in files:
-                if no in file:
-                    # 검색한 문자열을 포함한 파일의 전체 경로 출력
-                    original_nifti_file_path = os.path.join(root, file)
-        mask_voxel_count, pixel_spacing_x, pixel_spacing_y, slice_gap = read_nifti_spacing_and_mask_count(original_nifti_file_path)
-        mask_voxel_counts.append(mask_voxel_count)
-        pixel_spacing_xs.append(pixel_spacing_x)
-        pixel_spacing_ys.append(pixel_spacing_y)
-        slice_gaps.append(slice_gap)
+            original_nifti_file_path=''
+            # 디렉토리 탐색
+            for root, dirs, files in os.walk(directory_path):
+                for file in files:
+                    if no in file:
+                        # 검색한 문자열을 포함한 파일의 전체 경로 출력
+                        original_nifti_file_path = os.path.join(root, file)
+            mask_voxel_count, pixel_spacing_x, pixel_spacing_y, slice_gap = read_nifti_spacing_and_mask_count(original_nifti_file_path)
+            mask_voxel_counts.append(mask_voxel_count)
+            pixel_spacing_xs.append(pixel_spacing_x)
+            pixel_spacing_ys.append(pixel_spacing_y)
+            slice_gaps.append(slice_gap)
 
 
     if args.class_name == 1:
@@ -116,10 +117,10 @@ def Inference(args,device):
 
     if args.class_name == 1:
 #         test_save_path = "/data/sohui/Prostate/prostate_1c_test_result/{}/{}".format(args.exp, args.model)
-        test_save_path = "/data/hanyang_Prostate/Prostate/prostate_1c_test_result/{}/{}".format(args.exp, args.model)
+        test_save_path = "/data/hanyang_Prostate/Prostate/prostate_1c_test_result/{}/{}/{}".format(args.exp, args.model, args.phase)
     elif args.class_name == 2:
 #         test_save_path = "/data/sohui/Prostate/TZ_1c_test_result/{}/{}".format(args.exp, args.model)
-        test_save_path = "/data/hanyang_Prostate/Prostate/TZ_1c_test_result/{}/{}".format(args.exp, args.model)
+        test_save_path = "/data/hanyang_Prostate/Prostate/TZ_1c_test_result/{}/{}/{}".format(args.exp, args.model, args.phase)
 
     if os.path.exists(test_save_path):
         shutil.rmtree(test_save_path)
@@ -132,7 +133,7 @@ def Inference(args,device):
         net = net.cuda()
 
     save_mode_path = os.path.join(
-        snapshot_path, 'model_iter_6000_dice_0.8827.pth')#'iter_10000_dice_0.7169.pth')
+        snapshot_path, 'model_iter_600_dice_0.7717.pth')#'iter_10000_dice_0.7169.pth')
 
 #     net.load_state_dict(torch.load(save_mode_path))
     checkpoint = torch.load(save_mode_path)#["state_dict"]
@@ -173,8 +174,12 @@ if __name__ == '__main__':
                         help='print metrics for every samples?')
     parser.add_argument('--nms', type=int, default=0,
                         help='apply NMS post-procssing?')
+    parser.add_argument('--origin_spacing', type=int, default=0,
+                        help='using original spacing:1 vs unifying spacing:0')
     parser.add_argument('--class_name', type=int, default=1)
     parser.add_argument('--fold', type=int, default=3, help='k fold cross validation')
+    parser.add_argument('--phase', type=str,
+                        default='test', help='training|val|test')
 
     args = parser.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
@@ -183,6 +188,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     metric, dice_list,jacc_list, hd_list, ASD_list = Inference(args, device=device)
+    print("Dataset phase:{}".format(args.phase))
     for i in range((args.num_classes)-1):
         print('class:{}'.format(i+1))
         print('dice_mean:{}'.format(np.mean(dice_list[i])))

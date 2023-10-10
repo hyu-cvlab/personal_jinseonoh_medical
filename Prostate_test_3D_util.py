@@ -190,17 +190,17 @@ def test_all_case(net, val_loader,val_files, method="unet_3D", num_classes=4, pa
                 
                 img_itk = sitk.GetImageFromArray(image)
                 if len(pixel_spacing_xs) > 0:
-                    pred_itk.SetSpacing((pixel_spacing_xs[j].item(),pixel_spacing_ys[j].item(),slice_gaps[j].item()))
+                    img_itk.SetSpacing((pixel_spacing_xs[j].item(),pixel_spacing_ys[j].item(),slice_gaps[j].item()))
                 else:
-                    pred_itk.SetSpacing((0.8 ,0.8 ,0.8))
+                    img_itk.SetSpacing((0.8 ,0.8 ,0.8))
                 sitk.WriteImage(img_itk, test_save_path +
                                 "/{}_{}_img.nii.gz".format(ith,name[:11]))
 
                 lab_itk = sitk.GetImageFromArray(label.astype(np.uint8))
                 if len(pixel_spacing_xs) > 0:
-                    pred_itk.SetSpacing((pixel_spacing_xs[j].item(),pixel_spacing_ys[j].item(),slice_gaps[j].item()))
+                    lab_itk.SetSpacing((pixel_spacing_xs[j].item(),pixel_spacing_ys[j].item(),slice_gaps[j].item()))
                 else:
-                    pred_itk.SetSpacing((0.8 ,0.8 ,0.8))
+                    lab_itk.SetSpacing((0.8 ,0.8 ,0.8))
                 sitk.WriteImage(lab_itk, test_save_path +
                                 "/{}_{}_gt.nii.gz".format(ith,name[:11]))
 

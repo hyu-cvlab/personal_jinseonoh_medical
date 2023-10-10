@@ -182,7 +182,8 @@ def train(args, snapshot_path):
                 pixdim=(0.8,0.8,0.8),
                 mode=("bilinear", "nearest"),
             ),
-            RandSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128), random_size=False),#roi_size=(272,272,144), random_size=False),
+            CenterSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128))
+#             RandSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128), random_size=False),#roi_size=(272,272,144), random_size=False),
             RandFlipd(
                 keys=["image", "label"],
                 spatial_axis=[0],
@@ -216,7 +217,7 @@ def train(args, snapshot_path):
                 pixdim=(0.8 ,0.8 ,0.8),
                 mode=("bilinear", "nearest"),
             ),
-            #CenterSpatialCropd(keys=['image', 'label'], roi_size=(176,176,176))
+            CenterSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128))
         ]
     )
 
