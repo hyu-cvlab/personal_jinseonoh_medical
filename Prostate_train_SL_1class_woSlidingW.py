@@ -182,7 +182,7 @@ def train(args, snapshot_path):
                 pixdim=(0.8,0.8,0.8),
                 mode=("bilinear", "nearest"),
             ),
-            CenterSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128))
+            CenterSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128)),
 #             RandSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128), random_size=False),#roi_size=(272,272,144), random_size=False),
             RandFlipd(
                 keys=["image", "label"],
@@ -240,6 +240,12 @@ def train(args, snapshot_path):
             file_info['label'] = file_info['label'].replace('/label_trim/', '/label_2_trim/')
         for file_info in val_files:
             file_info['label'] = file_info['label'].replace('/label_trim/', '/label_2_trim/')
+    if args.class_name == -1:
+        # '/label_trim/'을 '/label_merge_trim/'으로 치환
+        for file_info in train_files:
+            file_info['label'] = file_info['label'].replace('/label_trim/', '/label_multi_trim/')
+        for file_info in val_files:
+            file_info['label'] = file_info['label'].replace('/label_trim/', '/label_multi_trim/')
 
 
     ##########train dataload
@@ -392,6 +398,8 @@ if __name__ == "__main__":
         snapshot_path = "/data/hanyang_Prostate/Prostate/prostate_1c_train_result/{}/{}_{}_fold{}".format(args.exp, args.model,args.max_iterations,args.fold)
     elif args.class_name == 2:
         snapshot_path = "/data/hanyang_Prostate/Prostate/TZ_1c_train_result/{}/{}_{}_fold{}".format(args.exp, args.model,args.max_iterations,args.fold)
+    elif args.class_name == -1:
+        snapshot_path = "/data/hanyang_Prostate/Prostate/multi_train_result/{}/{}_{}_fold{}".format(args.exp, args.model, args.max_iterations, args.fold)
     if not os.path.exists(snapshot_path):
         os.makedirs(snapshot_path)
     if os.path.exists(snapshot_path + '/code'):
