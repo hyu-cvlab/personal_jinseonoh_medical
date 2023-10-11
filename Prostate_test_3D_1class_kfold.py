@@ -49,7 +49,7 @@ def Inference(args,device):
                 pixdim=(0.8,0.8,0.8),
                 mode=("bilinear", "nearest"),
             ),
-            CenterSpatialCropd(keys=['image', 'label'], roi_size=(176,176,128)),
+            CenterSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128)),
             #SpatialPadd(keys=["image", "label"], spatial_size=(320, 320, 32), mode="constant"),
         ]
     )
@@ -73,6 +73,12 @@ def Inference(args,device):
 #             file_info['label'] = file_info['label'].replace('/label_trim/', '/label_2_trim/')
         for file_info in val_files:
             file_info['label'] = file_info['label'].replace('/label_trim/', '/label_2_trim/')
+    if args.class_name == -1:
+        # '/label_trim/'을 '/label_multi_trim/'으로 치환
+#         for file_info in train_files:
+#             file_info['label'] = file_info['label'].replace('/label_trim/', '/label_multi_trim/')
+        for file_info in val_files:
+            file_info['label'] = file_info['label'].replace('/label_trim/', '/label_multi_trim/')
 
 #     val_files = load_decathlon_datalist(datasets, True, args.phase)
 
@@ -113,6 +119,8 @@ def Inference(args,device):
     elif args.class_name == 2:
 #         snapshot_path = "/data/sohui/Prostate/TZ_1c_train_result/{}/{}".format(args.exp, args.model)
         snapshot_path = "/data/hanyang_Prostate/Prostate/TZ_1c_train_result/{}/{}".format(args.exp, args.model)
+    elif args.class_name == -1:
+        snapshot_path = "/data/hanyang_Prostate/Prostate/multi_train_result/{}/{}".format(args.exp, args.model)
     num_classes = args.num_classes
 
     if args.class_name == 1:
@@ -121,6 +129,8 @@ def Inference(args,device):
     elif args.class_name == 2:
 #         test_save_path = "/data/sohui/Prostate/TZ_1c_test_result/{}/{}".format(args.exp, args.model)
         test_save_path = "/data/hanyang_Prostate/Prostate/TZ_1c_test_result/{}/{}/{}".format(args.exp, args.model, args.phase)
+    elif args.class_name == -1:
+        test_save_path = "/data/hanyang_Prostate/Prostate/multi_test_result/{}/{}/{}".format(args.exp, args.model, args.phase)
 
     if os.path.exists(test_save_path):
         shutil.rmtree(test_save_path)
@@ -133,7 +143,7 @@ def Inference(args,device):
         net = net.cuda()
 
     save_mode_path = os.path.join(
-        snapshot_path, 'model_iter_600_dice_0.7717.pth')#'iter_10000_dice_0.7169.pth')
+        snapshot_path, 'model_iter_7600_dice_0.5913.pth')#'iter_10000_dice_0.7169.pth')
 
 #     net.load_state_dict(torch.load(save_mode_path))
     checkpoint = torch.load(save_mode_path)#["state_dict"]
