@@ -287,7 +287,38 @@ def train(args, snapshot_path):
     iterator = tqdm(range(max_epoch), ncols=70)
     kl_distance = nn.KLDivLoss(reduction='none')
     lr_ = base_lr
+    class_weights = []
+    if args.class_name == -1:
+        from collections import defaultdict
+        # 클래스별 개수 세기
+        class_counts = defaultdict(int)  # 각 클래스별 개수를 저장할 딕셔너리
 
+        for batch in SL_trainloader:
+            data = batch['label'].cuda()
+        #     print(data)
+        #     print(data.shape)
+            # 클래스별 개수 세기
+            # 특정 값(0, 1, 2)의 개수 세기
+            count_0 = torch.sum(torch.eq(data, 0)).item()
+            count_1 = torch.sum(torch.eq(data, 1)).item()
+            count_2 = torch.sum(torch.eq(data, 2)).item()
+
+#             print(f"Count of 0: {count_0}")
+#             print(f"Count of 1: {count_1}")
+#             print(f"Count of 2: {count_2}")
+#             print('--------------------------------------')
+
+            class_counts[0] += count_0
+            class_counts[1] += count_1
+            class_counts[2] += count_2
+        
+        class_weights.append(float(class_counts[0])/(class_counts[0]+class_counts[1]+class_counts[2]))
+        class_weights.append(float(class_counts[1])/(class_counts[0]+class_counts[1]+class_counts[2]))
+        class_weights.append(float(class_counts[2])/(class_counts[0]+class_counts[1]+class_counts[2]))
+        print(f'class_weights : {class_weights}')
+    else:
+        class_weights = None
+    
     for epoch_num in iterator:
         for i_batch, sampled_batch in enumerate(SL_trainloader):       #0,1 : SL_trainloader(bs:1), UL_trainloader(bs:1)
             volume_batch, label_batch = sampled_batch['image'].cuda(), sampled_batch['label'].cuda()
@@ -312,7 +343,7 @@ def train(args, snapshot_path):
             output_soft = torch.softmax(output, dim=1)
 
             ##supervised :dice CE
-            loss = (ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch))
+            loss = (ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights))
             # cross-entropy 는 실제 값과 예측값의 차이 (dissimilarity) 를 계산
 
 
