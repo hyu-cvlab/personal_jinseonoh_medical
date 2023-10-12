@@ -287,6 +287,7 @@ def train(args, snapshot_path):
     iterator = tqdm(range(max_epoch), ncols=70)
     kl_distance = nn.KLDivLoss(reduction='none')
     lr_ = base_lr
+    
     class_weights = []
     if args.class_name == -1:
         from collections import defaultdict
@@ -312,9 +313,9 @@ def train(args, snapshot_path):
             class_counts[1] += count_1
             class_counts[2] += count_2
         
-        class_weights.append(float(class_counts[0])/(class_counts[0]+class_counts[1]+class_counts[2]))
-        class_weights.append(float(class_counts[1])/(class_counts[0]+class_counts[1]+class_counts[2]))
-        class_weights.append(float(class_counts[2])/(class_counts[0]+class_counts[1]+class_counts[2]))
+        class_weights.append((class_counts[0]+class_counts[1]+class_counts[2])/(float(class_counts[0])*args.num_classes))
+        class_weights.append((class_counts[0]+class_counts[1]+class_counts[2])/(float(class_counts[1])*args.num_classes))
+        class_weights.append((class_counts[0]+class_counts[1]+class_counts[2])/(float(class_counts[2])*args.num_classes))
         print(f'class_weights : {class_weights}')
     else:
         class_weights = None
