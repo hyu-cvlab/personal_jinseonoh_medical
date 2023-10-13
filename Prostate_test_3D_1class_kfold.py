@@ -143,7 +143,7 @@ def Inference(args,device):
         net = net.cuda()
 
     save_mode_path = os.path.join(
-        snapshot_path, 'model_iter_7600_dice_0.5913.pth')#'iter_10000_dice_0.7169.pth')
+        snapshot_path, 'model_iter_2800_dice_0.609.pth')#'iter_10000_dice_0.7169.pth')
 
 #     net.load_state_dict(torch.load(save_mode_path))
     checkpoint = torch.load(save_mode_path)#["state_dict"]
