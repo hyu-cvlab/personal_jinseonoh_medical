@@ -274,19 +274,6 @@ def train(args, snapshot_path):
 
     optimizer1 = optim.SGD(model.parameters(), lr=base_lr,
                            momentum=0.9, weight_decay=0.0001)
-    ce_loss = CrossEntropyLoss()
-    dice_loss = losses.DiceLoss(num_classes)
-
-    writer = SummaryWriter(snapshot_path + '/log')
-    #logging.info("{} iterations per epoch".format(len(trainloader)))
-
-    iter_num = 0
-    max_epoch = max_iterations // len(SL_trainloader) + 1
-    best_performance1 = 0.0
-    best_performance2 = 0.0
-    iterator = tqdm(range(max_epoch), ncols=70)
-    kl_distance = nn.KLDivLoss(reduction='none')
-    lr_ = base_lr
     
     class_weights = []
     if args.class_name == -1:
@@ -319,6 +306,20 @@ def train(args, snapshot_path):
         print(f'class_weights : {class_weights}')
     else:
         class_weights = None
+        
+    ce_loss = CrossEntropyLoss(weight=torch.tensor(class_weights).to('cuda'))
+    dice_loss = losses.DiceLoss(num_classes)
+
+    writer = SummaryWriter(snapshot_path + '/log')
+    #logging.info("{} iterations per epoch".format(len(trainloader)))
+
+    iter_num = 0
+    max_epoch = max_iterations // len(SL_trainloader) + 1
+    best_performance1 = 0.0
+    best_performance2 = 0.0
+    iterator = tqdm(range(max_epoch), ncols=70)
+    kl_distance = nn.KLDivLoss(reduction='none')
+    lr_ = base_lr
     
     for epoch_num in iterator:
         for i_batch, sampled_batch in enumerate(SL_trainloader):       #0,1 : SL_trainloader(bs:1), UL_trainloader(bs:1)
