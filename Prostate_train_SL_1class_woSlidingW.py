@@ -34,8 +34,10 @@ from tqdm import tqdm
 
 #from config import get_config
 
-#from Prostate.networks.attnetionunet_monai import AttentionUnet
-from networks.vnet import VNet
+# from Prostate.networks.attnetionunet_monai import AttentionUnet
+# from networks.vnet import VNet
+# from networks.attention_unet import Attention_UNet
+from monai.networks.nets import AttentionUnet
 from utils import ramps, losses
 from MSDP_val_3D import test_all_case
 from skimage import segmentation as skimage_seg
@@ -58,7 +60,7 @@ from monai.data import (
     CacheDataset,
     load_decathlon_datalist,
 )
-import wandb
+# import wandb
 
 
 parser = argparse.ArgumentParser()
@@ -103,8 +105,8 @@ os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-wandb.init(project="SL_HProstate", config={}, reinit=True)
-wandb.run.name = '{}/{}'.format(args.exp,args.model)
+# wandb.init(project="SL_HProstate", config={}, reinit=True)
+# wandb.run.name = '{}/{}'.format(args.exp,args.model)
 
 if args.deterministic:
     cudnn.benchmark = False
@@ -152,7 +154,19 @@ def train(args, snapshot_path):
 
     def create_model(ema=False):
         # Network definition
-        model = VNet(n_channels=1, n_classes=num_classes, normalization='batchnorm', has_dropout=True)
+#         model = VNet(n_channels=1, n_classes=num_classes, normalization='batchnorm', has_dropout=True)
+#         model = Attention_UNet(in_channels=1, n_classes=num_classes, is_batchnorm=True)
+        # Attention U-Net 모델 생성
+        model = AttentionUnet(
+            spatial_dims=3,        # 3D 데이터를 다루는 경우 (2D인 경우는 dimensions=2)
+            in_channels=1,  # 입력 이미지 채널 수
+            out_channels=num_classes,   # 출력 클래스 수
+#             channels=[64, 128, 256, 512, 1024],
+            channels=[16, 32, 64, 128],  # 채널 수 설정
+            strides=[2, 2, 2, 2],      # 스트라이드 설정
+            kernel_size=3,             # 컨볼루션 커널 크기
+            dropout= 0.1
+        )
         if ema:
             for param in model.parameters():
                 param.detach_()
@@ -276,7 +290,7 @@ def train(args, snapshot_path):
                            momentum=0.9, weight_decay=0.0001)
     
     class_weights = []
-    if args.class_name == -1:
+    if args.use_weightloss != 0: # 0: cee+dice, 1: cee+w_dice, 2: w_cee+w_dice
         from collections import defaultdict
         # 클래스별 개수 세기
         class_counts = defaultdict(int)  # 각 클래스별 개수를 저장할 딕셔너리
@@ -291,23 +305,28 @@ def train(args, snapshot_path):
             count_1 = torch.sum(torch.eq(data, 1)).item()
             count_2 = torch.sum(torch.eq(data, 2)).item()
 
-#             print(f"Count of 0: {count_0}")
-#             print(f"Count of 1: {count_1}")
-#             print(f"Count of 2: {count_2}")
-#             print('--------------------------------------')
+    #             print(f"Count of 0: {count_0}")
+    #             print(f"Count of 1: {count_1}")
+    #             print(f"Count of 2: {count_2}")
+    #             print('--------------------------------------')
 
             class_counts[0] += count_0
             class_counts[1] += count_1
             class_counts[2] += count_2
-        
+
         class_weights.append((class_counts[0]+class_counts[1]+class_counts[2])/(float(class_counts[0])*args.num_classes))
         class_weights.append((class_counts[0]+class_counts[1]+class_counts[2])/(float(class_counts[1])*args.num_classes))
-        class_weights.append((class_counts[0]+class_counts[1]+class_counts[2])/(float(class_counts[2])*args.num_classes))
+        if args.class_name == -1:
+            class_weights.append((class_counts[0]+class_counts[1]+class_counts[2])/(float(class_counts[2])*args.num_classes))
+    
         print(f'class_weights : {class_weights}')
-    else:
+    else: # 0: cee+dice
         class_weights = None
         
-    ce_loss = CrossEntropyLoss(weight=torch.tensor(class_weights).to('cuda'))
+    if args.use_weightloss == 2:
+        ce_loss = CrossEntropyLoss(weight=torch.tensor(class_weights).to('cuda'))
+    else:
+        ce_loss = CrossEntropyLoss()
     dice_loss = losses.DiceLoss(num_classes)
 
     writer = SummaryWriter(snapshot_path + '/log')
@@ -361,13 +380,13 @@ def train(args, snapshot_path):
             writer.add_scalar('loss/supervised_loss',
                               loss.data.item(), iter_num)  # .data.item()이랑 .item()이랑 비교해보기
 
-            wandb.log({
-                "iter": iter_num,
-                "total_loss": loss.item(),  # total loss
-                "supervised_loss": loss.item(),
+#             wandb.log({
+#                 "iter": iter_num,
+#                 "total_loss": loss.item(),  # total loss
+#                 "supervised_loss": loss.item(),
 
 
-            })
+#             })
 
             logging.info('iteration %d : supervised_loss : %f'  % (
                 iter_num, loss.item()))
