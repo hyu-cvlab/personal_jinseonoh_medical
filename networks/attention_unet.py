@@ -16,7 +16,7 @@ class Attention_UNet(nn.Module):
         self.is_batchnorm = is_batchnorm
         self.feature_scale = feature_scale
 
-        filters = [16,32,64,128]#[64, 128, 256, 512, 1024]
+        filters = [64, 128, 256, 512, 1024]
         filters = [int(x / self.feature_scale) for x in filters]
 
         # downsampling
@@ -29,37 +29,34 @@ class Attention_UNet(nn.Module):
         self.conv3 = UnetConv3(filters[1], filters[2], self.is_batchnorm, kernel_size=(3,3,3), padding_size=(1,1,1))
         self.maxpool3 = nn.MaxPool3d(kernel_size=(2, 2, 2))
 
-        self.center = UnetConv3(filters[2], filters[3], self.is_batchnorm, kernel_size=(3,3,3), padding_size=(1,1,1))
-        self.gating = UnetGridGatingSignal3(filters[3], filters[3], kernel_size=(1, 1, 1), is_batchnorm=self.is_batchnorm)
-#         self.conv4 = UnetConv3(filters[2], filters[3], self.is_batchnorm, kernel_size=(3,3,3), padding_size=(1,1,1))
-#         self.maxpool4 = nn.MaxPool3d(kernel_size=(2, 2, 2))
+        self.conv4 = UnetConv3(filters[2], filters[3], self.is_batchnorm, kernel_size=(3,3,3), padding_size=(1,1,1))
+        self.maxpool4 = nn.MaxPool3d(kernel_size=(2, 2, 2))
 
-#         self.center = UnetConv3(filters[3], filters[4], self.is_batchnorm, kernel_size=(3,3,3), padding_size=(1,1,1))
-#         self.gating = UnetGridGatingSignal3(filters[4], filters[4], kernel_size=(1, 1, 1), is_batchnorm=self.is_batchnorm)
+        self.center = UnetConv3(filters[3], filters[4], self.is_batchnorm, kernel_size=(3,3,3), padding_size=(1,1,1))
+        self.gating = UnetGridGatingSignal3(filters[4], filters[4], kernel_size=(1, 1, 1), is_batchnorm=self.is_batchnorm)
 
         # attention blocks
         self.attentionblock2 = MultiAttentionBlock(in_size=filters[1], gate_size=filters[2], inter_size=filters[1],
                                                    nonlocal_mode=nonlocal_mode, sub_sample_factor= attention_dsample)
         self.attentionblock3 = MultiAttentionBlock(in_size=filters[2], gate_size=filters[3], inter_size=filters[2],
                                                    nonlocal_mode=nonlocal_mode, sub_sample_factor= attention_dsample)
-#         self.attentionblock4 = MultiAttentionBlock(in_size=filters[3], gate_size=filters[4], inter_size=filters[3],
-#                                                    nonlocal_mode=nonlocal_mode, sub_sample_factor= attention_dsample)
+        self.attentionblock4 = MultiAttentionBlock(in_size=filters[3], gate_size=filters[4], inter_size=filters[3],
+                                                   nonlocal_mode=nonlocal_mode, sub_sample_factor= attention_dsample)
 
         # upsampling
-#         self.up_concat4 = UnetUp3_CT(filters[4], filters[3], is_batchnorm)
+        self.up_concat4 = UnetUp3_CT(filters[4], filters[3], is_batchnorm)
         self.up_concat3 = UnetUp3_CT(filters[3], filters[2], is_batchnorm)
         self.up_concat2 = UnetUp3_CT(filters[2], filters[1], is_batchnorm)
         self.up_concat1 = UnetUp3_CT(filters[1], filters[0], is_batchnorm)
 
         # deep supervision
-#         self.dsv4 = UnetDsv3(in_size=filters[3], out_size=n_classes, scale_factor=8)
+        self.dsv4 = UnetDsv3(in_size=filters[3], out_size=n_classes, scale_factor=8)
         self.dsv3 = UnetDsv3(in_size=filters[2], out_size=n_classes, scale_factor=4)
         self.dsv2 = UnetDsv3(in_size=filters[1], out_size=n_classes, scale_factor=2)
         self.dsv1 = nn.Conv3d(in_channels=filters[0], out_channels=n_classes, kernel_size=1)
 
         # final conv (without any concat)
-#         self.final = nn.Conv3d(n_classes*4, n_classes, 1)
-        self.final = nn.Conv3d(n_classes*3, n_classes, 1)
+        self.final = nn.Conv3d(n_classes*4, n_classes, 1)
 
         # initialise weights
         for m in self.modules():
@@ -79,33 +76,29 @@ class Attention_UNet(nn.Module):
         conv3 = self.conv3(maxpool2)
         maxpool3 = self.maxpool3(conv3)
 
-#         conv4 = self.conv4(maxpool3)
-#         maxpool4 = self.maxpool4(conv4)
+        conv4 = self.conv4(maxpool3)
+        maxpool4 = self.maxpool4(conv4)
 
         # Gating Signal Generation
-#         center = self.center(maxpool4)
-        center = self.center(maxpool3)
+        center = self.center(maxpool4)
         gating = self.gating(center)
 
         # Attention Mechanism
         # Upscaling Part (Decoder)
-#         g_conv4, att4 = self.attentionblock4(conv4, gating)
-#         up4 = self.up_concat4(g_conv4, center)
-#         g_conv3, att3 = self.attentionblock3(conv3, up4)
-#         up3 = self.up_concat3(g_conv3, up4)
-        g_conv3, att3 = self.attentionblock3(conv3, gating)
-        up3 = self.up_concat3(g_conv3, center)
+        g_conv4, att4 = self.attentionblock4(conv4, gating)
+        up4 = self.up_concat4(g_conv4, center)
+        g_conv3, att3 = self.attentionblock3(conv3, up4)
+        up3 = self.up_concat3(g_conv3, up4)
         g_conv2, att2 = self.attentionblock2(conv2, up3)
         up2 = self.up_concat2(g_conv2, up3)
         up1 = self.up_concat1(conv1, up2)
 
         # Deep Supervision
-#         dsv4 = self.dsv4(up4)
+        dsv4 = self.dsv4(up4)
         dsv3 = self.dsv3(up3)
         dsv2 = self.dsv2(up2)
         dsv1 = self.dsv1(up1)
-#         final = self.final(torch.cat([dsv1,dsv2,dsv3,dsv4], dim=1))
-        final = self.final(torch.cat([dsv1,dsv2,dsv3], dim=1))
+        final = self.final(torch.cat([dsv1,dsv2,dsv3,dsv4], dim=1))
 
         return final
 
