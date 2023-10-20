@@ -35,9 +35,11 @@ from tqdm import tqdm
 #from config import get_config
 
 # from Prostate.networks.attnetionunet_monai import AttentionUnet
-# from networks.vnet import VNet
+from networks.vnet import VNet
+# from networks.attention_unet_2d import AttU_Net
+from networks.attention_unet import Attention_UNet
 # from networks.attention_unet import Attention_UNet
-from monai.networks.nets import AttentionUnet
+# from monai.networks.nets import AttentionUnet
 from utils import ramps, losses
 from MSDP_val_3D import test_all_case
 from skimage import segmentation as skimage_seg
@@ -98,6 +100,8 @@ parser.add_argument('--sw_batch_size', type=int,  default=8)
 parser.add_argument('--overlap', type=float,  default=0.5)
 parser.add_argument('--aggKernel', type=int,  default=11, help= 'Aggregation_module_kernelSize')
 parser.add_argument('--fold', type=int,  default=None, help='k fold cross validation')
+parser.add_argument('--use_weightloss', type=int, default=0, help='0: cee+dice, 1: cee+w_dice, 2: w_cee+w_dice')
+
 args = parser.parse_args()
 #config = get_config(args)
 
@@ -157,19 +161,30 @@ def train(args, snapshot_path):
 #         model = VNet(n_channels=1, n_classes=num_classes, normalization='batchnorm', has_dropout=True)
 #         model = Attention_UNet(in_channels=1, n_classes=num_classes, is_batchnorm=True)
         # Attention U-Net 모델 생성
-        model = AttentionUnet(
-            spatial_dims=3,        # 3D 데이터를 다루는 경우 (2D인 경우는 dimensions=2)
-            in_channels=1,  # 입력 이미지 채널 수
-            out_channels=num_classes,   # 출력 클래스 수
-#             channels=[64, 128, 256, 512, 1024],
-            channels=[16, 32, 64, 128],  # 채널 수 설정
-            strides=[2, 2, 2, 2],      # 스트라이드 설정
-            kernel_size=3,             # 컨볼루션 커널 크기
-            dropout= 0.1
-        )
-        if ema:
-            for param in model.parameters():
-                param.detach_()
+#         model = AttentionUnet(
+#             spatial_dims=3,        # 3D 데이터를 다루는 경우 (2D인 경우는 dimensions=2)
+#             in_channels=1,  # 입력 이미지 채널 수
+#             out_channels=num_classes,   # 출력 클래스 수
+# #             channels=[64, 128, 256, 512, 1024],
+#             channels=[16, 32, 64, 128],  # 채널 수 설정
+#             strides=[2, 2, 2, 2],      # 스트라이드 설정
+#             kernel_size=3,             # 컨볼루션 커널 크기
+#             dropout= 0.1
+#         )
+#         model = AttU_Net(img_ch=1,output_ch=num_classes)
+        model = None
+        if "vnet" in args.model:
+            model = VNet(n_channels=1, n_classes=num_classes, normalization='batchnorm', has_dropout=True)
+            if ema:
+                for param in model.parameters():
+                    param.detach_()
+        
+        elif "attention_unet" in args.model:
+            model = Attention_UNet(in_channels=1, n_classes=num_classes, is_batchnorm=True)
+        
+        else:
+            pass
+        
         return model
 
     model = create_model()
@@ -314,10 +329,10 @@ def train(args, snapshot_path):
             class_counts[1] += count_1
             class_counts[2] += count_2
 
-        class_weights.append((class_counts[0]+class_counts[1]+class_counts[2])/(float(class_counts[0])*args.num_classes))
-        class_weights.append((class_counts[0]+class_counts[1]+class_counts[2])/(float(class_counts[1])*args.num_classes))
+        class_weights.append((class_counts[0]+class_counts[1]+class_counts[2])/(float(class_counts[0])))
+        class_weights.append((class_counts[0]+class_counts[1]+class_counts[2])/(float(class_counts[1])))
         if args.class_name == -1:
-            class_weights.append((class_counts[0]+class_counts[1]+class_counts[2])/(float(class_counts[2])*args.num_classes))
+            class_weights.append((class_counts[0]+class_counts[1]+class_counts[2])/(float(class_counts[2])))
     
         print(f'class_weights : {class_weights}')
     else: # 0: cee+dice

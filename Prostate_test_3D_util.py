@@ -246,7 +246,14 @@ def cal_dice(prediction, label, num=2):
     return total_dice
 
 
-def calculate_metric_percase(pred, gt):
+def calculate_metric_percase(gt, pred):
+    # 나중에 test할 때 shape 정확히 확인하고 수정하자
+#     if pred.sum() > 0 and gt.sum() > 0:
+#         dice = metric.binary.dc(pred, gt)
+#         hd95 = metric.binary.hd95(pred, gt)
+#         return np.array([dice, hd95])
+#     else:
+#         return np.zeros(2)
     dice = metric.binary.dc(pred, gt)
     jc = metric.binary.jc(pred, gt)
     #ravd = abs(metric.binary.ravd(pred, gt))

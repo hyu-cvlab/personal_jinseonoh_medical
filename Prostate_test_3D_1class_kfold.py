@@ -3,8 +3,9 @@ import os
 import shutil
 import numpy as np
 import torch
-# from networks.vnet import VNet
-from monai.networks.nets import AttentionUnet
+from networks.vnet import VNet
+# from monai.networks.nets import AttentionUnet
+from networks.attention_unet import Attention_UNet
 from Prostate_test_3D_util import test_all_case
 import torch.nn as nn
 import nibabel as nib
@@ -136,25 +137,44 @@ def Inference(args,device):
     if os.path.exists(test_save_path):
         shutil.rmtree(test_save_path)
     os.makedirs(test_save_path)
+    net = None
+    if "vnet" in args.model:
+        net = VNet(n_channels=1, n_classes=num_classes, normalization='batchnorm', has_dropout=True)
+
+    elif "attention_unet" in args.model:
+        net = Attention_UNet(in_channels=1, n_classes=num_classes, is_batchnorm=True)
+
+    else:
+        pass
+
     #net = unet_3D(n_classes=num_classes, in_channels=1)
 #     net = VNet(n_channels=1, n_classes=num_classes, normalization='batchnorm', has_dropout=True)
-    net = AttentionUnet(
-    spatial_dims=3,        # 3D 데이터를 다루는 경우 (2D인 경우는 dimensions=2)
-    in_channels=1,  # 입력 이미지 채널 수
-    out_channels=num_classes,   # 출력 클래스 수
-#             channels=[64, 128, 256, 512, 1024],
-    channels=[16, 32, 64, 128],  # 채널 수 설정
-    strides=[2, 2, 2, 2],      # 스트라이드 설정
-    kernel_size=3,             # 컨볼루션 커널 크기
-    dropout= 0.1
-)
+#     net = Attention_UNet(in_channels=1, n_classes=num_classes, is_batchnorm=True)
+#     net = AttentionUnet(
+#     spatial_dims=3,        # 3D 데이터를 다루는 경우 (2D인 경우는 dimensions=2)
+#     in_channels=1,  # 입력 이미지 채널 수
+#     out_channels=num_classes,   # 출력 클래스 수
+# #             channels=[64, 128, 256, 512, 1024],
+#     channels=[16, 32, 64, 128],  # 채널 수 설정
+#     strides=[2, 2, 2, 2],      # 스트라이드 설정
+#     kernel_size=3,             # 컨볼루션 커널 크기
+#     dropout= 0.1
+# )
     if len(args.gpu.split(',')) > 1:
         net = nn.DataParallel(net).to(device)
     else :
         net = net.cuda()
 
-    save_mode_path = os.path.join(
-        snapshot_path, 'model_iter_10200_dice_0.5096.pth')#'iter_10000_dice_0.7169.pth')
+    pth_files = [f for f in os.listdir(snapshot_path) if f.endswith(".pth")]
+    # print(pth_files)
+    if not pth_files:
+        print("No .pth files found in the snapshot path.")
+    else:
+        max_score, best_model_filename = max(
+            ((float(f.split("_dice_")[1].split(".")[0]), f) for f in pth_files if "_dice_" in f),
+            default=(None, None)
+        )
+    save_mode_path = os.path.join(snapshot_path, best_model_filename)#'iter_10000_dice_0.7169.pth')
 
 #     net.load_state_dict(torch.load(save_mode_path))
     checkpoint = torch.load(save_mode_path)#["state_dict"]
