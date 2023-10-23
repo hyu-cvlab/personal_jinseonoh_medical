@@ -171,7 +171,7 @@ def Inference(args,device):
         print("No .pth files found in the snapshot path.")
     else:
         max_score, best_model_filename = max(
-            ((float(f.split("_dice_")[1].split(".")[0]), f) for f in pth_files if "_dice_" in f),
+            ((float(f.split("_dice_")[1][:-4]), f) for f in pth_files if "_dice_" in f),
             default=(None, None)
         )
     save_mode_path = os.path.join(snapshot_path, best_model_filename)#'iter_10000_dice_0.7169.pth')
