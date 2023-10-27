@@ -44,6 +44,9 @@ from monai.networks.nets import UNETR
 from utils import ramps, losses
 from MSDP_val_3D import test_all_case
 from skimage import segmentation as skimage_seg
+# from pytorch3dunet.unet3d.losses import HausdorffDistanceDiceLoss
+from monai.losses.hausdorff_loss import HausdorffDTLoss
+from torch.optim import lr_scheduler
 
 #from monai.networks.nets import UNet
 from monai.transforms import (
@@ -147,6 +150,12 @@ def get_current_consistency_weight(epoch):
     # Consistency ramp-up from https://arxiv.org/abs/1610.02242
     return args.consistency * ramps.sigmoid_rampup(epoch, args.consistency_rampup)
 
+initial_weight = 0.1
+weight_multiplier = 1.1
+# 사용자 정의 스케줄링 함수
+def weight_scheduler(epoch):
+    # 매 10 epoch마다 weight를 증가
+    return min(1, initial_weight * (weight_multiplier ** (epoch // 500)))
 
 
 def train(args, snapshot_path):
@@ -303,10 +312,13 @@ def train(args, snapshot_path):
         db_val, batch_size=1, shuffle=False, num_workers=4, pin_memory=True
     )
 
+    
 
     optimizer1 = optim.SGD(model.parameters(), lr=base_lr,
                            momentum=0.9, weight_decay=0.0001)
-    
+    # 가중치를 동적으로 조절할 스케줄러를 생성
+    scheduler = lr_scheduler.LambdaLR(optimizer1, lr_lambda=weight_scheduler)
+    loss_weight = initial_weight#0.1
     class_weights = []
     if args.use_weightloss != 0: # 0: cee+dice, 1: cee+w_dice, 2: w_cee+w_dice
         from collections import defaultdict
@@ -346,6 +358,10 @@ def train(args, snapshot_path):
     else:
         ce_loss = CrossEntropyLoss()
     dice_loss = losses.DiceLoss(num_classes)
+    
+#     # Create the HD loss function
+#     hd_loss = HausdorffDistanceDiceLoss()
+    hd_loss = HausdorffDTLoss()
 
     writer = SummaryWriter(snapshot_path + '/log')
     #logging.info("{} iterations per epoch".format(len(trainloader)))
@@ -377,13 +393,21 @@ def train(args, snapshot_path):
 
             #noise = torch.clamp(torch.randn_like(volume_batch) * 0.1, -0.2, 0.2)
             #volume_batch = volume_batch + noise
+            
+            # 학습을 진행하면서 스케줄러에 따라 가중치 조절
+            scheduler.step()
+            # 가중치 업데이트
+            loss_weight = weight_scheduler(epoch_num)
+#             loss_weight = min(1, loss_weight)
 
             output = model(volume_batch)        # 2,1,176,176,176 -> 2,2,176,176,176
             output_soft = torch.softmax(output, dim=1)
-
+            
             ##supervised :dice CE
-            loss = (ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights))
+            loss = ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights) + (loss_weight * hd_loss(output_soft[:, 1, ...].unsqueeze(1), label_batch))
             # cross-entropy 는 실제 값과 예측값의 차이 (dissimilarity) 를 계산
+#             print("loss", loss.shape, loss)
+#             print("original loss", (ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights)).shape, ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights))
 
 
             optimizer1.zero_grad()

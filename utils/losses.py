@@ -7,8 +7,6 @@ from torch.autograd import Variable
 import matplotlib.pyplot as plt
 
 
-
-
 def dice_loss(score, target):
     target = target.float()
     smooth = 1e-5
