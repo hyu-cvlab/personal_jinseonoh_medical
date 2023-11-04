@@ -139,7 +139,7 @@ def Inference(args,device):
         shutil.rmtree(test_save_path)
     os.makedirs(test_save_path)
     net = None
-    if "vnet" in args.model:
+    if "vnet" in args.model or "test" in args.model:
         net = VNet(n_channels=1, n_classes=num_classes, normalization='batchnorm', has_dropout=True)
 
     elif "attention_unet" in args.model:

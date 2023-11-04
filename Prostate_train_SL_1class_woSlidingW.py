@@ -72,7 +72,7 @@ from monai.data import (
 parser = argparse.ArgumentParser()
 parser.add_argument('--root_path', type=str,
                     #default='/data/sohui/Prostate/data/trim/sl_data/centerCrop_350_350_200', help='Name of Experiment')
-                    default='/data/hanyang_Prostate/50_example/trim/sl_data/centerCrop_350_350_200', help='Name of Experiment')
+                    default='/data/hanyang_Prostate/50_example/trim/sl_data_wo_hu/centerCrop_350_350_200', help='Name of Experiment')
 parser.add_argument('--exp', type=str,
                     default='test', help='experiment_name')
 parser.add_argument('--model', type=str,
@@ -223,8 +223,8 @@ def train(args, snapshot_path):
                 pixdim=(0.8,0.8,0.8),
                 mode=("bilinear", "nearest"),
             ),
-            CenterSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128)),
-#             RandSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128), random_size=False),#roi_size=(272,272,144), random_size=False),
+#             CenterSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128)),
+            RandSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128), random_size=False),#roi_size=(272,272,144), random_size=False),
             RandFlipd(
                 keys=["image", "label"],
                 spatial_axis=[0],
@@ -317,7 +317,7 @@ def train(args, snapshot_path):
     optimizer1 = optim.SGD(model.parameters(), lr=base_lr,
                            momentum=0.9, weight_decay=0.0001)
     # 가중치를 동적으로 조절할 스케줄러를 생성
-    scheduler = lr_scheduler.LambdaLR(optimizer1, lr_lambda=weight_scheduler)
+#     scheduler = lr_scheduler.LambdaLR(optimizer1, lr_lambda=weight_scheduler)
     loss_weight = initial_weight#0.1
     class_weights = []
     if args.use_weightloss != 0: # 0: cee+dice, 1: cee+w_dice, 2: w_cee+w_dice
@@ -360,8 +360,7 @@ def train(args, snapshot_path):
     dice_loss = losses.DiceLoss(num_classes)
     
 #     # Create the HD loss function
-#     hd_loss = HausdorffDistanceDiceLoss()
-    hd_loss = HausdorffDTLoss()
+#     hd_loss = HausdorffDTLoss()
 
     writer = SummaryWriter(snapshot_path + '/log')
     #logging.info("{} iterations per epoch".format(len(trainloader)))
@@ -395,16 +394,17 @@ def train(args, snapshot_path):
             #volume_batch = volume_batch + noise
             
             # 학습을 진행하면서 스케줄러에 따라 가중치 조절
-            scheduler.step()
+#             scheduler.step()
             # 가중치 업데이트
-            loss_weight = weight_scheduler(epoch_num)
+#             loss_weight = weight_scheduler(epoch_num)
 #             loss_weight = min(1, loss_weight)
 
             output = model(volume_batch)        # 2,1,176,176,176 -> 2,2,176,176,176
             output_soft = torch.softmax(output, dim=1)
-            
+#             print('hd_loss:', hd_loss(output_soft[:, 1, ...].unsqueeze(1), label_batch))
             ##supervised :dice CE
-            loss = ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights) + (loss_weight * hd_loss(output_soft[:, 1, ...].unsqueeze(1), label_batch))
+#             loss = ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights) + (0.1 * hd_loss(output_soft[:, 1, ...].unsqueeze(1), label_batch))
+            loss = ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights)
             # cross-entropy 는 실제 값과 예측값의 차이 (dissimilarity) 를 계산
 #             print("loss", loss.shape, loss)
 #             print("original loss", (ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights)).shape, ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights))

@@ -36,9 +36,9 @@ def CenterCrop(image, label, output_size):
 ##trim된 데이터의 image
 data_path = '/data/hanyang_Prostate/50_example/image_nifti_wholebody/1-50'#'/home/psh/data/hanyang_Prostate/50_example/image_nifti_wholebody/1-50'
 ## PZ trim
-# label_path = '/home/psh/data/hanyang_Prostate/50_example/trim/data_pre_before/label_nii_class1_trim'
+label_path = '/data/hanyang_Prostate/50_example/trim/data_pre_before/label_nii_class1_trim'
 ## TZ trim
-label_path = '/data/hanyang_Prostate/50_example/trim/data_pre_before/label_nii_class2_trim'#'/home/psh/data/hanyang_Prostate/50_example/trim/data_pre_before/label_nii_class2_trim'
+# label_path = '/data/hanyang_Prostate/50_example/trim/data_pre_before/label_nii_class2_trim'#'/home/psh/data/hanyang_Prostate/50_example/trim/data_pre_before/label_nii_class2_trim'
 
 data_file_list = sorted(os.listdir(data_path))
 label_file_list = sorted(os.listdir(label_path))
@@ -82,10 +82,25 @@ for k in range(len(data_file_list)):
     #    ct = np.pad(ct, ((0, z_padding), (0, 0), (0, 0)), 'constant')
     #    mask = np.pad(mask, ((0, z_padding), (0, 0), (0, 0)), 'constant')
 
-    ## HU 조정 (-100 ~ 200)
-    for i in range(len(ct)):
-        ct[i] = np.where(ct[i] < -100, -100, ct[i])
-        ct[i] = np.where(ct[i] > 200, 200, ct[i])
+#     ## HU 조정 (-100 ~ 200)
+#     for i in range(len(ct)):
+#         ct[i] = np.where(ct[i] < -100, -100, ct[i])
+#         ct[i] = np.where(ct[i] > 200, 200, ct[i])
+
+#     # 원하는 Window Level 및 Window Width 설정
+#     window_level = 45
+#     window_width = 450
+
+#     # Window 설정 범위 계산
+#     lower_bound = window_level - window_width / 2
+#     upper_bound = window_level + window_width / 2
+
+#     # HU 값을 Window 범위 내로 조정
+#     ct = np.where(ct < lower_bound, lower_bound, ct)
+#     ct = np.where(ct > upper_bound, upper_bound, ct)
+
+    # Min-Max 정규화
+#     ct = (ct - lower_bound) / (upper_bound - lower_bound)
 
     ## normalization
     ct = (ct - ct.min()) / (ct.max() - ct.min())
@@ -101,15 +116,15 @@ for k in range(len(data_file_list)):
 
     print('{}, d:{}, w:{}, h:{}'.format(data_file_list[k], ct.shape[0], ct.shape[1], ct.shape[2]))
 
-#     c_path = '/home/psh/data/hanyang_Prostate/50_example/trim/ssl_data/centerCrop_200/image'
-    m_path = '/data/hanyang_Prostate/50_example/trim/sl_data/centerCrop_350_350_200/label_2_trim'#'/home/psh/data/hanyang_Prostate/50_example/trim/ssl_data/centerCrop_200/label_trim'
+    c_path = '/data/hanyang_Prostate/50_example/trim/sl_data_wo_hu/centerCrop_350_350_200/image'
+    m_path = '/data/hanyang_Prostate/50_example/trim/sl_data_wo_hu/centerCrop_350_350_200/label_1_trim'#'/home/psh/data/hanyang_Prostate/50_example/trim/ssl_data/centerCrop_200/label_trim'
 
-#     if not os.path.exists(c_path):
-#         os.makedirs(c_path)
+    if not os.path.exists(c_path):
+        os.makedirs(c_path)
     if not os.path.exists(m_path):
         os.makedirs(m_path)
 
-#     c_path2 = c_path + '/{}'.format((data_file_list[k]))
+    c_path2 = c_path + '/{}'.format((data_file_list[k]))
     m_path2 = m_path + '/{}.nii.gz'.format((label_file_list[k].split('_')[1]))
 
     ct_t = np.transpose(ct, (1, 2, 0))
@@ -117,7 +132,7 @@ for k in range(len(data_file_list)):
 
     ct_t = nib.Nifti1Image(ct_t, affine)
     mask_t = nib.Nifti1Image(mask_t, affine)
-#     nib.save(ct_t, c_path2)
+    nib.save(ct_t, c_path2)
     nib.save(mask_t, m_path2)
     print('__________________________________________')
 

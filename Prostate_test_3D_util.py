@@ -109,7 +109,7 @@ def test_all_case(net, val_loader,val_files, method="unet_3D", num_classes=4, pa
         hd_list = np.zeros((num_classes-1, len(val_files)))
         ASD_list = np.zeros((num_classes-1, len(val_files)))
         for j, sampled_batch in enumerate(loader):
-            affine_ = sampled_batch['image_meta_dict']['affine']
+#             affine_ = sampled_batch['image_meta_dict']['affine']
             name = val_files[j]['image'].split("/")[-1].split(".")[0]
             #ids = sampled_batch.split("/")[-1].replace(".h5", "")
             image = sampled_batch['image'][0][0].numpy()
