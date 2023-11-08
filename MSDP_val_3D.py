@@ -11,7 +11,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 
-def test_single_case(net, image, stride_xy, stride_z, patch_size, num_classes=1):
+def test_single_case(net, image, stride_xy, stride_z, patch_size, num_classes=1, model_name=''):
     w, h, d = image.shape
 
     # if the size of image is less than patch_size, then padding it 
@@ -59,7 +59,10 @@ def test_single_case(net, image, stride_xy, stride_z, patch_size, num_classes=1)
                 test_patch = torch.from_numpy(test_patch).cuda()
 
                 with torch.no_grad():
-                    y1 = net(test_patch)
+                    if model_name == 'unet_3D_dv_semi':
+                        y1, _, _, _ = net(test_patch)
+                    else:
+                        y1 = net(test_patch)
                     # ensemble
                     y = torch.softmax(y1, dim=1)
                 y = y.cpu().data.numpy()
@@ -88,7 +91,7 @@ def cal_metric(gt, pred):
         return np.zeros(2)
 
 
-def test_all_case(net,val_loader, num_classes=4, patch_size=(48, 160, 160), stride_xy=32, stride_z=24):
+def test_all_case(net,val_loader, num_classes=4, patch_size=(48, 160, 160), stride_xy=32, stride_z=24, model_name=''):
     first_total=0.0
     second_total=0.0
     first_metric = np.zeros((1, 2))
@@ -99,7 +102,7 @@ def test_all_case(net,val_loader, num_classes=4, patch_size=(48, 160, 160), stri
         image = sampled_batch['image'][0][0].numpy()
         label = sampled_batch['label'][0][0].numpy()
         prediction = test_single_case(
-            net, image, stride_xy, stride_z, patch_size, num_classes=num_classes)
+            net, image, stride_xy, stride_z, patch_size, num_classes=num_classes, model_name=model_name)
 
 
         for i in range(1, num_classes):

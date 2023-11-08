@@ -83,9 +83,9 @@ for k in range(len(data_file_list)):
     #    mask = np.pad(mask, ((0, z_padding), (0, 0), (0, 0)), 'constant')
 
 #     ## HU 조정 (-100 ~ 200)
-#     for i in range(len(ct)):
-#         ct[i] = np.where(ct[i] < -100, -100, ct[i])
-#         ct[i] = np.where(ct[i] > 200, 200, ct[i])
+    for i in range(len(ct)):
+        ct[i] = np.where(ct[i] < -50, -50, ct[i])
+        ct[i] = np.where(ct[i] > 200, 200, ct[i])
 
 #     # 원하는 Window Level 및 Window Width 설정
 #     window_level = 45
@@ -99,11 +99,11 @@ for k in range(len(data_file_list)):
 #     ct = np.where(ct < lower_bound, lower_bound, ct)
 #     ct = np.where(ct > upper_bound, upper_bound, ct)
 
-    # Min-Max 정규화
+#     # Min-Max 정규화
 #     ct = (ct - lower_bound) / (upper_bound - lower_bound)
 
     ## normalization
-    ct = (ct - ct.min()) / (ct.max() - ct.min())
+#     ct = (ct - ct.min()) / (ct.max() - ct.min())
     ## standard deviation
     #ct = (ct - np.mean(ct)) / np.std(ct)  ##normalize
     ct = ct.astype(np.float32)
@@ -116,8 +116,8 @@ for k in range(len(data_file_list)):
 
     print('{}, d:{}, w:{}, h:{}'.format(data_file_list[k], ct.shape[0], ct.shape[1], ct.shape[2]))
 
-    c_path = '/data/hanyang_Prostate/50_example/trim/sl_data_wo_hu/centerCrop_350_350_200/image'
-    m_path = '/data/hanyang_Prostate/50_example/trim/sl_data_wo_hu/centerCrop_350_350_200/label_1_trim'#'/home/psh/data/hanyang_Prostate/50_example/trim/ssl_data/centerCrop_200/label_trim'
+    c_path = '/data/hanyang_Prostate/50_example/trim/sl_data_hu_m50to200_wo_norm/centerCrop_350_350_200/image'
+    m_path = '/data/hanyang_Prostate/50_example/trim/sl_data_hu_m50to200_wo_norm/centerCrop_350_350_200/label_trim'#'/home/psh/data/hanyang_Prostate/50_example/trim/ssl_data/centerCrop_200/label_trim'
 
     if not os.path.exists(c_path):
         os.makedirs(c_path)

@@ -92,7 +92,7 @@ def Inference(args,device):
         db_val, batch_size=1, shuffle=False, num_workers=4, pin_memory=True
     )
     
-    directory_path = "/data/hanyang_Prostate/50_example/trim/sl_data/centerCrop_350_350_200/label_trim/"
+    directory_path = "/data/hanyang_Prostate/50_example/trim/sl_data_wo_norm/centerCrop_350_350_200/label_trim/"
     mask_voxel_counts = []
     pixel_spacing_xs = []
     pixel_spacing_ys = []
@@ -203,7 +203,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--root_path', type=str,
 #                         default='/data/sohui/Prostate/data/trim/ssl_data/centerCrop_200', help='Name of Experiment')
-                        default='/data/hanyang_Prostate/50_example/trim/sl_data/centerCrop_350_350_200', help='Name of Experiment')
+                        default='/data/hanyang_Prostate/50_example/trim/sl_data_wo_norm/centerCrop_350_350_200', help='Name of Experiment')
     parser.add_argument('--exp', type=str,
                         default='SSL/MT_ATO_350_350_200_rampup_refpaper', help='experiment_name')
     parser.add_argument('--model', type=str,

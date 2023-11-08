@@ -72,7 +72,7 @@ from monai.data import (
 parser = argparse.ArgumentParser()
 parser.add_argument('--root_path', type=str,
                     #default='/data/sohui/Prostate/data/trim/sl_data/centerCrop_350_350_200', help='Name of Experiment')
-                    default='/data/hanyang_Prostate/50_example/trim/sl_data_wo_hu/centerCrop_350_350_200', help='Name of Experiment')
+                    default='/data/hanyang_Prostate/50_example/trim/sl_data/centerCrop_350_350_200', help='Name of Experiment')
 parser.add_argument('--exp', type=str,
                     default='test', help='experiment_name')
 parser.add_argument('--model', type=str,
@@ -318,6 +318,10 @@ def train(args, snapshot_path):
                            momentum=0.9, weight_decay=0.0001)
     # 가중치를 동적으로 조절할 스케줄러를 생성
 #     scheduler = lr_scheduler.LambdaLR(optimizer1, lr_lambda=weight_scheduler)
+
+    # 학습률 스케줄러 설정
+#     scheduler = lr_scheduler.StepLR(optimizer1, step_size=3000, gamma=0.1)
+        
     loss_weight = initial_weight#0.1
     class_weights = []
     if args.use_weightloss != 0: # 0: cee+dice, 1: cee+w_dice, 2: w_cee+w_dice
@@ -395,6 +399,10 @@ def train(args, snapshot_path):
             
             # 학습을 진행하면서 스케줄러에 따라 가중치 조절
 #             scheduler.step()
+            
+            # 학습률 업데이트
+#             scheduler.step()
+            
             # 가중치 업데이트
 #             loss_weight = weight_scheduler(epoch_num)
 #             loss_weight = min(1, loss_weight)

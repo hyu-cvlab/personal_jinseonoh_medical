@@ -66,7 +66,7 @@ parser.add_argument('--model', type=str,
                     default='unet_3D_dv_semi', help='model_name')
 parser.add_argument('--max_iterations', type=int,
                     default=30000, help='maximum epoch number to train')
-parser.add_argument('--batch_size', type=int, default=4,
+parser.add_argument('--batch_size', type=int, default=2,
                     help='batch_size per gpu')
 parser.add_argument('--deterministic', type=int,  default=1,
                     help='whether use deterministic training')
@@ -390,11 +390,11 @@ def train(args, snapshot_path):
 
             iter_num = iter_num + 1
             writer.add_scalar('info/lr', lr_, iter_num)
-            writer.add_scalar('info/total_loss', loss, iter_num)
+            writer.add_scalar('info/total_loss', loss.item(), iter_num)
             writer.add_scalar('info/supervised_loss',
-                              supervised_loss, iter_num)
+                              supervised_loss.item(), iter_num)
             writer.add_scalar('info/consistency_loss',
-                              consistency_loss, iter_num)
+                              consistency_loss.item(), iter_num)
             writer.add_scalar('info/consistency_weight',
                               consistency_weight, iter_num)
 
@@ -420,11 +420,11 @@ def train(args, snapshot_path):
 #                 writer.add_image('train/Groundtruth_label',
 #                                  grid_image, iter_num)
 
-            if iter_num > 0 and iter_num % 1000 == 0:
+            if iter_num > 0 and iter_num % 200 == 0:
                 model.eval()
                 avg_metric = test_all_case(
                     model, val_loader, num_classes=num_classes, patch_size=args.patch_size,
-                    stride_xy=64, stride_z=64)
+                    stride_xy=64, stride_z=64, model_name=args.model)
                 if avg_metric[:, 0].mean() > best_performance:
                     best_performance = avg_metric[:, 0].mean()
                     save_mode_path = os.path.join(snapshot_path,
