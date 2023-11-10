@@ -84,7 +84,7 @@ for k in range(len(data_file_list)):
 
 #     ## HU 조정 (-100 ~ 200)
     for i in range(len(ct)):
-        ct[i] = np.where(ct[i] < -50, -50, ct[i])
+        ct[i] = np.where(ct[i] < -100, -100, ct[i])
         ct[i] = np.where(ct[i] > 200, 200, ct[i])
 
 #     # 원하는 Window Level 및 Window Width 설정

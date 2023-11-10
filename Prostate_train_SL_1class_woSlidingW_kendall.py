@@ -72,7 +72,7 @@ from monai.data import (
 parser = argparse.ArgumentParser()
 parser.add_argument('--root_path', type=str,
                     #default='/data/sohui/Prostate/data/trim/sl_data/centerCrop_350_350_200', help='Name of Experiment')
-                    default='/data/hanyang_Prostate/50_example/trim/sl_data/centerCrop_350_350_200', help='Name of Experiment')
+                    default='/data/hanyang_Prostate/50_example/trim/sl_data_wo_norm/centerCrop_350_350_200', help='Name of Experiment')
 parser.add_argument('--exp', type=str,
                     default='test', help='experiment_name')
 parser.add_argument('--model', type=str,
@@ -318,6 +318,8 @@ def train(args, snapshot_path):
 
     optimizer1 = optim.SGD(model.parameters(), lr=base_lr,
                            momentum=0.9, weight_decay=0.0001)
+    # 학습률 스케줄러 설정
+    scheduler = lr_scheduler.StepLR(optimizer1, step_size=3000, gamma=0.1)
     # 가중치를 동적으로 조절할 스케줄러를 생성
 #     scheduler = lr_scheduler.LambdaLR(optimizer1, lr_lambda=weight_scheduler)
     loss_weight = initial_weight#0.1
@@ -397,6 +399,8 @@ def train(args, snapshot_path):
             
             # 학습을 진행하면서 스케줄러에 따라 가중치 조절
 #             scheduler.step()
+            # 학습률 업데이트
+            scheduler.step()
             # 가중치 업데이트
 #             loss_weight = weight_scheduler(epoch_num)
 #             loss_weight = min(1, loss_weight)
@@ -470,7 +474,7 @@ def train(args, snapshot_path):
                 model.eval()
                 avg_metric1 = test_all_case(
                     model, val_loader=val_loader, num_classes=num_classes, patch_size=args.patch_size,
-                    stride_xy=64, stride_z=64)
+                    stride_xy=64, stride_z=64, model_name=args.model)
                 if avg_metric1[0][0] > best_performance1:
                     best_performance1 = avg_metric1[0][0]
                     save_mode_path = os.path.join(snapshot_path,

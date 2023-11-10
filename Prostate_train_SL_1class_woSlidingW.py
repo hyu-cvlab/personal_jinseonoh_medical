@@ -72,7 +72,7 @@ from monai.data import (
 parser = argparse.ArgumentParser()
 parser.add_argument('--root_path', type=str,
                     #default='/data/sohui/Prostate/data/trim/sl_data/centerCrop_350_350_200', help='Name of Experiment')
-                    default='/data/hanyang_Prostate/50_example/trim/sl_data/centerCrop_350_350_200', help='Name of Experiment')
+                    default='/data/hanyang_Prostate/50_example/trim/sl_data_wo_norm/centerCrop_350_350_200', help='Name of Experiment')
 parser.add_argument('--exp', type=str,
                     default='test', help='experiment_name')
 parser.add_argument('--model', type=str,
@@ -452,7 +452,7 @@ def train(args, snapshot_path):
                 model.eval()
                 avg_metric1 = test_all_case(
                     model, val_loader=val_loader, num_classes=num_classes, patch_size=args.patch_size,
-                    stride_xy=64, stride_z=64)
+                    stride_xy=64, stride_z=64, model_name=args.model)
                 if avg_metric1[0][0] > best_performance1:
                     best_performance1 = avg_metric1[0][0]
                     save_mode_path = os.path.join(snapshot_path,

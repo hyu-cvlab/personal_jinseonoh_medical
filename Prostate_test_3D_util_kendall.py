@@ -68,9 +68,12 @@ def test_single_case(net, image, stride_xy, stride_z, patch_size, num_classes=1,
                 test_patch = torch.from_numpy(test_patch).cuda()
 
                 with torch.no_grad():
-                    y1 = net(test_patch)
-                    # ensemble
-                    y = torch.softmax(y1, dim=1)
+                    if model_name == 'unet_3D_dv_semi':
+                        y1, _,_,_ = net(test_patch)
+                    else:
+                        y1,_ = net(test_patch)
+                # ensemble
+                y = torch.softmax(y1, dim=1)
                 y = y.cpu().data.numpy()
                 y = y[0, :, :, :, :]
                 score_map[:, xs:xs+patch_size[0], ys:ys+patch_size[1], zs:zs+patch_size[2]] \
@@ -260,3 +263,4 @@ def calculate_metric_percase(gt, pred):
     hd = metric.binary.hd95(pred, gt)
     asd = metric.binary.asd(pred, gt)
     return np.array([dice, jc, hd, asd])
+

@@ -7,7 +7,7 @@ from networks.vnet import VNet
 from monai.networks.nets import UNETR
 # from monai.networks.nets import AttentionUnet
 from networks.attention_unet import Attention_UNet
-from Prostate_test_3D_util import test_all_case
+from Prostate_test_3D_util_kendall import test_all_case
 import torch.nn as nn
 import nibabel as nib
 
@@ -244,3 +244,4 @@ if __name__ == '__main__':
         #print('HD_std:{}'.format(np.std(hd_list[i])))
         print('ASD_mean:{}'.format(np.mean(ASD_list[i])))
         # print('ASD_std:{}'.format(np.std(ASD_list[i])))
+
