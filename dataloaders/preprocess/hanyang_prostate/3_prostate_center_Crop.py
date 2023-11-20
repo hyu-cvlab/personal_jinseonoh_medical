@@ -4,6 +4,7 @@ import numpy as np
 import nibabel as nib
 import monai
 import torch
+from scipy.ndimage import binary_erosion, binary_dilation
 
 
 def CenterCrop(image, label, output_size):
@@ -31,6 +32,17 @@ def CenterCrop(image, label, output_size):
                                                   output_size[1], d1:d1 + output_size[2]]
 
     return image, label
+
+def erode_dilate_3d(image, iterations=1):
+    eroded = binary_erosion(image, iterations=iterations)
+    dilated = binary_dilation(eroded, iterations=iterations)
+    return dilated
+
+def dilate_erode_3d(image, iterations=1):
+    dilated = binary_dilation(image, iterations=iterations)
+    eroded = binary_erosion(dilated, iterations=iterations)
+    return eroded
+
 
 
 ##trim된 데이터의 image
@@ -112,12 +124,14 @@ for k in range(len(data_file_list)):
 
     ## crop center
     ct,mask = CenterCrop(ct,mask,output_size=[200,350,350])
+    morph_mask = dilate_erode_3d(mask)
+    morph_mask = (morph_mask > 0).astype(np.uint8)  # 이진화 및 데이터 타입 변경
 
 
     print('{}, d:{}, w:{}, h:{}'.format(data_file_list[k], ct.shape[0], ct.shape[1], ct.shape[2]))
 
-    c_path = '/data/hanyang_Prostate/50_example/trim/sl_data_hu_m50to200_wo_norm/centerCrop_350_350_200/image'
-    m_path = '/data/hanyang_Prostate/50_example/trim/sl_data_hu_m50to200_wo_norm/centerCrop_350_350_200/label_trim'#'/home/psh/data/hanyang_Prostate/50_example/trim/ssl_data/centerCrop_200/label_trim'
+    c_path = '/data/hanyang_Prostate/50_example/trim/sl_data_wo_norm_morphology/centerCrop_350_350_200/image'
+    m_path = '/data/hanyang_Prostate/50_example/trim/sl_data_wo_norm_morphology/centerCrop_350_350_200/label_trim'#'/home/psh/data/hanyang_Prostate/50_example/trim/ssl_data/centerCrop_200/label_trim'
 
     if not os.path.exists(c_path):
         os.makedirs(c_path)
@@ -128,7 +142,7 @@ for k in range(len(data_file_list)):
     m_path2 = m_path + '/{}.nii.gz'.format((label_file_list[k].split('_')[1]))
 
     ct_t = np.transpose(ct, (1, 2, 0))
-    mask_t = np.transpose(mask, (1, 2, 0))
+    mask_t = np.transpose(morph_mask, (1, 2, 0))
 
     ct_t = nib.Nifti1Image(ct_t, affine)
     mask_t = nib.Nifti1Image(mask_t, affine)
