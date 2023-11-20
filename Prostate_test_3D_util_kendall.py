@@ -20,7 +20,7 @@ def getLargestCC(segmentation):
 
     return largestCC
 
-def test_single_case(net, image, stride_xy, stride_z, patch_size, num_classes=1, model_name=""):
+def test_single_case(net, image, stride_xy, stride_z, patch_size, num_classes=1, model_name="",T=10):
     w, h, d = image.shape
 
     # if the size of image is less than patch_size, then padding it
@@ -67,15 +67,35 @@ def test_single_case(net, image, stride_xy, stride_z, patch_size, num_classes=1,
                     test_patch, axis=0), axis=0).astype(np.float32)
                 test_patch = torch.from_numpy(test_patch).cuda()
 
-                with torch.no_grad():
-                    if model_name == 'unet_3D_dv_semi':
+
+                if model_name == 'unet_3D_dv_semi':
+                    with torch.no_grad():
                         y1, _,_,_ = net(test_patch)
-                    else:
-                        y1,_ = net(test_patch)
+                else:
+                    y1_list =[]
+                    aleatoric_list = []
+                    for sample_idx in range(T):
+                        with torch.no_grad():
+                            mu, log_var = net(test_patch)
+                        y1_list.append(mu)
+                        aleatoric_list.append(log_var)
+                    y1 = torch.stack(y1_list, dim=0).cuda()
+                    epistemic = torch.var(y1, axis=0).cuda()
+                    y1 = torch.mean(y1, axis=0).cuda()
+#                     aleatoric = torch.stack(aleatoric_list, dim=0).cuda()
+#                     aleatoric = torch.mean(aleatoric, axis=0).cuda()
+                    
+                    
+#                     print("y1.shape", y1.shape)  # torch.Size([1, 2, 256, 256, 128])
+#                     print("aleatoric.shape", aleatoric.shape)  # torch.Size([1, 2, 256, 256, 128])
+#                     print("epistemic.shape", epistemic.shape)  # torch.Size([1, 2, 256, 256, 128])
                 # ensemble
                 y = torch.softmax(y1, dim=1)
                 y = y.cpu().data.numpy()
                 y = y[0, :, :, :, :]
+#                 print("y.shape:",y.shape) # y.shape: (2, 256, 256, 128)
+                aleatoric = -np.sum(y * np.log(y + 1e-10), axis=0)
+#                 print("aleatoric.shape",aleatoric.shape)  # aleatoric.shape (256, 256, 128)
                 score_map[:, xs:xs+patch_size[0], ys:ys+patch_size[1], zs:zs+patch_size[2]] \
                     = score_map[:, xs:xs+patch_size[0], ys:ys+patch_size[1], zs:zs+patch_size[2]] + y
                 cnt[xs:xs+patch_size[0], ys:ys+patch_size[1], zs:zs+patch_size[2]] \

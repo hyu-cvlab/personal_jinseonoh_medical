@@ -410,30 +410,46 @@ def train(args, snapshot_path):
             mu, log_var = model(volume_batch)        # 2,1,176,176,176 -> 2,2,176,176,176
             
             
-            mu_mc = mu[:,1,...].unsqueeze(-1).repeat(1, 1, 1, 1, nb_mc)
-            std = torch.exp(log_var)
+            mu_mc = mu.unsqueeze(-1).repeat(1, 1, 1, 1, 1, nb_mc)
+            std_mc = torch.exp(log_var).unsqueeze(-1).repeat(1, 1, 1, 1, 1, nb_mc)
+
+#             mu_mc = mu[:,1,...].unsqueeze(-1).repeat(1, 1, 1, 1, 1, nb_mc)
+#             std = torch.exp(log_var)
             #print(std.shape,"chch")
             #print(std[:,1,...].unsqueeze(-1).repeat(1,1,1,1,nb_mc).shape)
+            
             # Hard coded the known shape of the data
-            noise = torch.randn(batch_size, 256, 256, 128, nb_mc).cuda() * std[:,1,...].unsqueeze(-1).repeat(1,1,1,1,nb_mc)
-            reparameterized_output = mu_mc + noise
+            noise = torch.randn(batch_size, 2, 256, 256, 128, nb_mc).cuda()
+
+            reparameterized_output = mu_mc + noise * std_mc
 
 #            print('ccc', reparameterized_output.shape)
 #            print(label_batch.squeeze(1).unsqueeze(-1).shape)
-            y_tru = label_batch.squeeze(1).unsqueeze(-1).repeat(1, 1, 1, 1, nb_mc)
+#             print("label_batch.shape:",label_batch.shape) # label_batch.shape: torch.Size([2, 1, 256, 256, 128])
+            
+#             print("reparameterized_output.shape:",reparameterized_output.shape) # torch.Size([2, 2, 256, 256, 128, 10])
+
+            y_tru = label_batch.unsqueeze(-1).repeat(1, 1, 1, 1, 1, nb_mc)
+#             print("y_tru.shape:",y_tru.shape) # label_batch.shape: torch.Size([2, 1, 256, 256, 128])
 #            print(y_tru.shape)
-            mc_x = ce_loss(reparameterized_output, y_tru)
+            mc_x = ce_loss(reparameterized_output, y_tru.squeeze(1).long())
             # Mean across mc samples
             mc_x = torch.mean(mc_x, dim=-1)
             # Mean across everything else
             attenuated_ce_loss = torch.mean(mc_x)
+#             output_soft = torch.softmax(reparameterized_output, dim=1)  # dice loss에 영향을 줌
             output_soft = torch.softmax(mu, dim=1)
+#             print("mu.shape:",mu.shape)
+#             print("y_tru.shape:",y_tru.shape)
+#             print("output_soft.shape:",output_soft.shape)
+#             print("label_batch.shape:",label_batch.shape)
             
 #             print('hd_loss:', hd_loss(output_soft[:, 1, ...].unsqueeze(1), label_batch))
             ##supervised :dice CE
 #             loss = ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights) + (0.1 * hd_loss(output_soft[:, 1, ...].unsqueeze(1), label_batch))
             
 #             loss = ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights)
+#             loss = attenuated_ce_loss + dice_loss(output_soft, y_tru, weight=class_weights)  # dice loss에 영향을 줌
             loss = attenuated_ce_loss + dice_loss(output_soft, label_batch, weight=class_weights)
             # cross-entropy 는 실제 값과 예측값의 차이 (dissimilarity) 를 계산
 #             print("loss", loss.shape, loss)

@@ -3,7 +3,7 @@ import os
 import shutil
 import numpy as np
 import torch
-from networks.vnet import VNet
+from networks.vnet_kendall import VNet
 from monai.networks.nets import UNETR
 # from monai.networks.nets import AttentionUnet
 from networks.attention_unet import Attention_UNet

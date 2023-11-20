@@ -18,3 +18,4 @@ volume_estimation_total_ssl.ipynb
 volume_estimation_multi_weighted_cee_dice.ipynb
 volume_estimation_multi_weighted_cee_dice_2.ipynb
 volume_estimation_multi_weighted_dice.ipynb
+volume_estimation_total_aleatoric_and_epistemic.ipynb
