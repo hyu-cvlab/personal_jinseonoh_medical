@@ -61,6 +61,8 @@ def test_single_case(net, image, stride_xy, stride_z, patch_size, num_classes=1,
                 with torch.no_grad():
                     if model_name == 'unet_3D_dv_semi':
                         y1, _, _, _ = net(test_patch)
+                    elif model_name == 'vnet_2task':
+                        y1, _ = net(test_patch)
                     else:
                         y1 = net(test_patch)
                     # ensemble
