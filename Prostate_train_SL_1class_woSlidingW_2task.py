@@ -29,23 +29,26 @@ import torch.nn as nn
 import torch.optim as optim
 from tensorboardX import SummaryWriter
 from torch.nn.modules.loss import CrossEntropyLoss
+from torch.nn import MSELoss
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 #from config import get_config
 
 # from Prostate.networks.attnetionunet_monai import AttentionUnet
-from networks.vnet import VNet
+# from networks.vnet import VNet
+from networks.vnet_2task_SDM_2Dec import VNet
 # from networks.attention_unet_2d import AttU_Net
 from networks.attention_unet import Attention_UNet
 from monai.networks.nets import UNETR
 # from networks.attention_unet import Attention_UNet
 # from monai.networks.nets import AttentionUnet
 from utils import ramps, losses
-from MSDP_val_3D import test_all_case
+from MSDP_val_3D import test_all_case   # caution!!!!
+from utils.util import compute_sdf
 from skimage import segmentation as skimage_seg
 # from pytorch3dunet.unet3d.losses import HausdorffDistanceDiceLoss
-from monai.losses.hausdorff_loss import HausdorffDTLoss
+# from monai.losses.hausdorff_loss import HausdorffDTLoss
 from torch.optim import lr_scheduler
 
 #from monai.networks.nets import UNet
@@ -76,7 +79,7 @@ parser.add_argument('--root_path', type=str,
 parser.add_argument('--exp', type=str,
                     default='test', help='experiment_name')
 parser.add_argument('--model', type=str,
-                    default='unet_10000', help='model_name')
+                    default='vnet_2task', help='model_name')
 parser.add_argument('--max_iterations', type=int,
                     default=30000, help='maximum epoch number to train')
 parser.add_argument('--batch_size', type=int, default=2,
@@ -100,9 +103,9 @@ parser.add_argument('--ema_decay', type=float,  default=0.99, help='ema_decay')
 
 parser.add_argument('--gpu', type=str,  default='4', help='GPU to use')
 parser.add_argument('--add', type=float,  default=1e-8)
-parser.add_argument('--sw_batch_size', type=int,  default=8)
-parser.add_argument('--overlap', type=float,  default=0.5)
-parser.add_argument('--aggKernel', type=int,  default=11, help= 'Aggregation_module_kernelSize')
+# parser.add_argument('--sw_batch_size', type=int,  default=8)
+# parser.add_argument('--overlap', type=float,  default=0.5)
+# parser.add_argument('--aggKernel', type=int,  default=11, help= 'Aggregation_module_kernelSize')
 parser.add_argument('--fold', type=int,  default=None, help='k fold cross validation')
 parser.add_argument('--use_weightloss', type=int, default=0, help='0: cee+dice, 1: cee+w_dice, 2: w_cee+w_dice')
 
@@ -362,6 +365,7 @@ def train(args, snapshot_path):
     else:
         ce_loss = CrossEntropyLoss()
     dice_loss = losses.DiceLoss(num_classes)
+    mse_loss = MSELoss()
     
 #     # Create the HD loss function
 #     hd_loss = HausdorffDTLoss()
@@ -372,9 +376,9 @@ def train(args, snapshot_path):
     iter_num = 0
     max_epoch = max_iterations // len(SL_trainloader) + 1
     best_performance1 = 0.0
-    best_performance2 = 0.0
+#     best_performance2 = 0.0
     iterator = tqdm(range(max_epoch), ncols=70)
-    kl_distance = nn.KLDivLoss(reduction='none')
+#     kl_distance = nn.KLDivLoss(reduction='none')
     lr_ = base_lr
     
     for epoch_num in iterator:
@@ -393,7 +397,6 @@ def train(args, snapshot_path):
             print()
             '''
 
-
             #noise = torch.clamp(torch.randn_like(volume_batch) * 0.1, -0.2, 0.2)
             #volume_batch = volume_batch + noise
             
@@ -407,12 +410,22 @@ def train(args, snapshot_path):
 #             loss_weight = weight_scheduler(epoch_num)
 #             loss_weight = min(1, loss_weight)
 
-            output = model(volume_batch)        # 2,1,176,176,176 -> 2,2,176,176,176
-            output_soft = torch.softmax(output, dim=1)
+#             output = model(volume_batch)        # 2,1,176,176,176 -> 2,2,176,176,176
+#             output_soft = torch.softmax(output, dim=1)
+            outputs_2class, outputs_1class_tanh = model(volume_batch)  ## model = student
+            outputs_soft_2class = torch.softmax(outputs_2class, dim=1)
+            
+            with torch.no_grad():
+                gt_dis = compute_sdf(label_batch.cpu().numpy(), outputs_1class_tanh[:, 0, ...].shape)
+                gt_dis = torch.from_numpy(gt_dis).float().cuda()
+
 #             print('hd_loss:', hd_loss(output_soft[:, 1, ...].unsqueeze(1), label_batch))
             ##supervised :dice CE
 #             loss = ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights) + (0.1 * hd_loss(output_soft[:, 1, ...].unsqueeze(1), label_batch))
-            loss = ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights)
+            loss_ce = ce_loss(outputs_2class, label_batch.squeeze(1).long())
+            loss_dice = dice_loss(outputs_soft_2class, label_batch, weight=class_weights)
+            loss_sdm = mse_loss(outputs_1class_tanh[:, 0, ...], gt_dis)
+            loss = loss_ce + loss_dice + loss_sdm
             # cross-entropy 는 실제 값과 예측값의 차이 (dissimilarity) 를 계산
 #             print("loss", loss.shape, loss)
 #             print("original loss", (ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights)).shape, ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights))
@@ -427,8 +440,11 @@ def train(args, snapshot_path):
 
             
             writer.add_scalar('lr', lr_, iter_num)
-            writer.add_scalar('loss/supervised_loss',
-                              loss.data.item(), iter_num)  # .data.item()이랑 .item()이랑 비교해보기
+            writer.add_scalar('loss/total_loss',
+                              loss.item(), iter_num)  # .data.item()이랑 .item()이랑 비교해보기
+            writer.add_scalar('loss/loss_ce', loss_ce.item(), iter_num)
+            writer.add_scalar('loss/loss_dice', loss_dice.item(), iter_num)
+            writer.add_scalar('loss/loss_sdm', loss_sdm.item(), iter_num)
 
 #             wandb.log({
 #                 "iter": iter_num,
@@ -438,8 +454,8 @@ def train(args, snapshot_path):
 
 #             })
 
-            logging.info('iteration %d : supervised_loss : %f'  % (
-                iter_num, loss.item()))
+            logging.info('iteration %d : loss : %f, loss_ce: %f, loss_dice: %f, loss_sdm: %f' %
+                (iter_num, loss.item(), loss_ce.item(), loss_dice.item(), loss_sdm.item()))
 
 
             lr_ = base_lr * (1.0 - iter_num / max_iterations) ** 0.9
