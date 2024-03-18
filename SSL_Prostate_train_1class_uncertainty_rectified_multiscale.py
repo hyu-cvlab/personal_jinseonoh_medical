@@ -35,18 +35,18 @@ from tqdm import tqdm
 #from config import get_config
 
 # from Prostate.networks.attnetionunet_monai import AttentionUnet
-from networks.vnet_kendall import VNet
+from networks.vnet_multiscale import VNet
 # from networks.attention_unet_2d import AttU_Net
 from networks.attention_unet import Attention_UNet
 from monai.networks.nets import UNETR
 # from networks.attention_unet import Attention_UNet
 # from monai.networks.nets import AttentionUnet
 from utils import ramps, losses
-from MSDP_val_3D_kendall import test_all_case
+from MSDP_val_3D_multiscale import test_all_case
 from skimage import segmentation as skimage_seg
 # from pytorch3dunet.unet3d.losses import HausdorffDistanceDiceLoss
-# from monai.losses.hausdorff_loss import HausdorffDTLoss
-# from torch.optim import lr_scheduler
+from monai.losses.hausdorff_loss import HausdorffDTLoss
+from torch.optim import lr_scheduler
 
 #from monai.networks.nets import UNet
 from monai.transforms import (
@@ -72,7 +72,7 @@ from monai.data import (
 parser = argparse.ArgumentParser()
 parser.add_argument('--root_path', type=str,
                     #default='/data/sohui/Prostate/data/trim/sl_data/centerCrop_350_350_200', help='Name of Experiment')
-                    default='/data/hanyang_Prostate/50_example/trim/sl_data_wo_norm/centerCrop_350_350_200', help='Name of Experiment')
+                    default='/data/hanyang_Prostate/50_example/trim/sl_data_wo_norm_morphology_5/centerCrop_350_350_200', help='Name of Experiment')
 parser.add_argument('--exp', type=str,
                     default='test', help='experiment_name')
 parser.add_argument('--model', type=str,
@@ -83,7 +83,7 @@ parser.add_argument('--batch_size', type=int, default=2,
                     help='batch_size per gpu')
 parser.add_argument('--deterministic', type=int,  default=1,
                     help='whether use deterministic training')
-parser.add_argument('--base_lr', type=float,  default=0.001,
+parser.add_argument('--base_lr', type=float,  default=0.01,
                     help='segmentation network learning rate')
 parser.add_argument('--patch_size', type=list,  default=[256,256,128],
                     help='patch size of network input')
@@ -105,7 +105,6 @@ parser.add_argument('--overlap', type=float,  default=0.5)
 parser.add_argument('--aggKernel', type=int,  default=11, help= 'Aggregation_module_kernelSize')
 parser.add_argument('--fold', type=int,  default=None, help='k fold cross validation')
 parser.add_argument('--use_weightloss', type=int, default=0, help='0: cee+dice, 1: cee+w_dice, 2: w_cee+w_dice')
-parser.add_argument('--nb_mc', type=int, default=10)
 
 args = parser.parse_args()
 #config = get_config(args)
@@ -166,7 +165,6 @@ def train(args, snapshot_path):
     batch_size = args.batch_size
     max_iterations = args.max_iterations
     fold = args.fold
-    nb_mc = args.nb_mc
 
     def create_model(ema=False):
         # Network definition
@@ -318,10 +316,12 @@ def train(args, snapshot_path):
 
     optimizer1 = optim.SGD(model.parameters(), lr=base_lr,
                            momentum=0.9, weight_decay=0.0001)
-    # 학습률 스케줄러 설정
-#     scheduler = lr_scheduler.StepLR(optimizer1, step_size=3000, gamma=0.1)
     # 가중치를 동적으로 조절할 스케줄러를 생성
 #     scheduler = lr_scheduler.LambdaLR(optimizer1, lr_lambda=weight_scheduler)
+
+    # 학습률 스케줄러 설정
+#     scheduler = lr_scheduler.StepLR(optimizer1, step_size=3000, gamma=0.1)
+        
     loss_weight = initial_weight#0.1
     class_weights = []
     if args.use_weightloss != 0: # 0: cee+dice, 1: cee+w_dice, 2: w_cee+w_dice
@@ -399,61 +399,41 @@ def train(args, snapshot_path):
             
             # 학습을 진행하면서 스케줄러에 따라 가중치 조절
 #             scheduler.step()
+            
             # 학습률 업데이트
 #             scheduler.step()
+            
             # 가중치 업데이트
 #             loss_weight = weight_scheduler(epoch_num)
 #             loss_weight = min(1, loss_weight)
 
-#             output = model(volume_batch)        # 2,1,176,176,176 -> 2,2,176,176,176
-#             output_soft = torch.softmax(output, dim=1)
-            mu, log_var = model(volume_batch)        # 2,1,176,176,176 -> 2,2,176,176,176
-            
-            
-            mu_mc = mu.unsqueeze(-1).repeat(1, 1, 1, 1, 1, nb_mc)
-            std_mc = torch.exp(log_var).unsqueeze(-1).repeat(1, 1, 1, 1, 1, nb_mc)
+            outputs_aux1, outputs_aux2, outputs_aux3, outputs_aux4,  = model(
+                volume_batch)
+            outputs_aux1_soft = torch.softmax(outputs_aux1, dim=1)
+            outputs_aux2_soft = torch.softmax(outputs_aux2, dim=1)
+            outputs_aux3_soft = torch.softmax(outputs_aux3, dim=1)
+            outputs_aux4_soft = torch.softmax(outputs_aux4, dim=1)
+            loss_ce_aux1 = ce_loss(outputs_aux1,
+                                   label_batch.squeeze(1).long())
+            loss_ce_aux2 = ce_loss(outputs_aux2,
+                                   label_batch.squeeze(1).long())
+            loss_ce_aux3 = ce_loss(outputs_aux3,
+                                   label_batch.squeeze(1).long())
+            loss_ce_aux4 = ce_loss(outputs_aux4,
+                                   label_batch.squeeze(1).long())
 
-#             mu_mc = mu[:,1,...].unsqueeze(-1).repeat(1, 1, 1, 1, 1, nb_mc)
-#             std = torch.exp(log_var)
-            #print(std.shape,"chch")
-            #print(std[:,1,...].unsqueeze(-1).repeat(1,1,1,1,nb_mc).shape)
-            
-            # Hard coded the known shape of the data
-            noise = torch.randn(batch_size, 2, 256, 256, 128, nb_mc).cuda()
+            loss_dice_aux1 = dice_loss(
+                outputs_aux1_soft, label_batch.float())
+            loss_dice_aux2 = dice_loss(
+                outputs_aux2_soft, label_batch.float())
+            loss_dice_aux3 = dice_loss(
+                outputs_aux3_soft, label_batch.float())
+            loss_dice_aux4 = dice_loss(
+                outputs_aux4_soft, label_batch.float())
 
-            reparameterized_output = mu_mc + noise * std_mc
-
-#            print('ccc', reparameterized_output.shape)
-#            print(label_batch.squeeze(1).unsqueeze(-1).shape)
-#             print("label_batch.shape:",label_batch.shape) # label_batch.shape: torch.Size([2, 1, 256, 256, 128])
-            
-#             print("reparameterized_output.shape:",reparameterized_output.shape) # torch.Size([2, 2, 256, 256, 128, 10])
-
-            y_tru = label_batch.unsqueeze(-1).repeat(1, 1, 1, 1, 1, nb_mc)
-#             print("y_tru.shape:",y_tru.shape) # label_batch.shape: torch.Size([2, 1, 256, 256, 128])
-#            print(y_tru.shape)
-            mc_x = ce_loss(reparameterized_output, y_tru.squeeze(1).long())
-            # Mean across mc samples
-            mc_x = torch.mean(mc_x, dim=-1)
-            # Mean across everything else
-            attenuated_ce_loss = torch.mean(mc_x)
-#             output_soft = torch.softmax(reparameterized_output, dim=1)  # dice loss에 영향을 줌
-            output_soft = torch.softmax(mu, dim=1)
-#             print("mu.shape:",mu.shape)
-#             print("y_tru.shape:",y_tru.shape)
-#             print("output_soft.shape:",output_soft.shape)
-#             print("label_batch.shape:",label_batch.shape)
-            
-#             print('hd_loss:', hd_loss(output_soft[:, 1, ...].unsqueeze(1), label_batch))
-            ##supervised :dice CE
-#             loss = ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights) + (0.1 * hd_loss(output_soft[:, 1, ...].unsqueeze(1), label_batch))
-            
+            loss = (loss_ce_aux1+loss_ce_aux2+loss_ce_aux3+loss_ce_aux4 +
+                               loss_dice_aux1+loss_dice_aux2+loss_dice_aux3+loss_dice_aux4)/8
 #             loss = ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights)
-#             loss = attenuated_ce_loss + dice_loss(output_soft, y_tru, weight=class_weights)  # dice loss에 영향을 줌
-            loss = attenuated_ce_loss + dice_loss(output_soft, label_batch, weight=class_weights)
-            # cross-entropy 는 실제 값과 예측값의 차이 (dissimilarity) 를 계산
-#             print("loss", loss.shape, loss)
-#             print("original loss", (ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights)).shape, ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights))
 
 
             optimizer1.zero_grad()
@@ -466,7 +446,7 @@ def train(args, snapshot_path):
             
             writer.add_scalar('lr', lr_, iter_num)
             writer.add_scalar('loss/supervised_loss',
-                              loss.data.item(), iter_num)  # .data.item()이랑 .item()이랑 비교해보기
+                              loss.item(), iter_num)  # .data.item()이랑 .item()이랑 비교해보기
 
 #             wandb.log({
 #                 "iter": iter_num,
@@ -554,3 +534,5 @@ if __name__ == "__main__":
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
     logging.info(str(args))
     train(args, snapshot_path)
+
+

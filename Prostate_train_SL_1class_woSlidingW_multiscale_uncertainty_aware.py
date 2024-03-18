@@ -35,19 +35,19 @@ from tqdm import tqdm
 #from config import get_config
 
 # from Prostate.networks.attnetionunet_monai import AttentionUnet
-from networks.vnet_kendall import VNet
+from networks.vnet_multiscale_uncertainty_aware import VNet
 # from networks.attention_unet_2d import AttU_Net
 from networks.attention_unet import Attention_UNet
 from monai.networks.nets import UNETR
 # from networks.attention_unet import Attention_UNet
 # from monai.networks.nets import AttentionUnet
 from utils import ramps, losses
-from MSDP_val_3D_kendall import test_all_case
+from MSDP_val_3D_multiscale_uncertainty_aware import test_all_case
 from skimage import segmentation as skimage_seg
 # from pytorch3dunet.unet3d.losses import HausdorffDistanceDiceLoss
-# from monai.losses.hausdorff_loss import HausdorffDTLoss
-# from torch.optim import lr_scheduler
-
+from monai.losses.hausdorff_loss import HausdorffDTLoss
+from torch.optim import lr_scheduler
+from torch.utils.data import ConcatDataset
 #from monai.networks.nets import UNet
 from monai.transforms import (
     EnsureChannelFirstd,
@@ -72,7 +72,7 @@ from monai.data import (
 parser = argparse.ArgumentParser()
 parser.add_argument('--root_path', type=str,
                     #default='/data/sohui/Prostate/data/trim/sl_data/centerCrop_350_350_200', help='Name of Experiment')
-                    default='/data/hanyang_Prostate/50_example/trim/sl_data_wo_norm/centerCrop_350_350_200', help='Name of Experiment')
+                    default='/data/hanyang_Prostate/50_example/trim/sl_data_wo_norm_morphology_5/centerCrop_350_350_200', help='Name of Experiment')
 parser.add_argument('--exp', type=str,
                     default='test', help='experiment_name')
 parser.add_argument('--model', type=str,
@@ -83,7 +83,7 @@ parser.add_argument('--batch_size', type=int, default=2,
                     help='batch_size per gpu')
 parser.add_argument('--deterministic', type=int,  default=1,
                     help='whether use deterministic training')
-parser.add_argument('--base_lr', type=float,  default=0.001,
+parser.add_argument('--base_lr', type=float,  default=0.01,
                     help='segmentation network learning rate')
 parser.add_argument('--patch_size', type=list,  default=[256,256,128],
                     help='patch size of network input')
@@ -105,7 +105,6 @@ parser.add_argument('--overlap', type=float,  default=0.5)
 parser.add_argument('--aggKernel', type=int,  default=11, help= 'Aggregation_module_kernelSize')
 parser.add_argument('--fold', type=int,  default=None, help='k fold cross validation')
 parser.add_argument('--use_weightloss', type=int, default=0, help='0: cee+dice, 1: cee+w_dice, 2: w_cee+w_dice')
-parser.add_argument('--nb_mc', type=int, default=10)
 
 args = parser.parse_args()
 #config = get_config(args)
@@ -166,7 +165,6 @@ def train(args, snapshot_path):
     batch_size = args.batch_size
     max_iterations = args.max_iterations
     fold = args.fold
-    nb_mc = args.nb_mc
 
     def create_model(ema=False):
         # Network definition
@@ -202,6 +200,54 @@ def train(args, snapshot_path):
         return model
 
     model = create_model()
+    pth_files = [f for f in os.listdir(snapshot_path) if f.endswith(".pth")]
+    max_score = 0.0
+    if not pth_files:
+        print("No .pth files found in the snapshot path.")
+    else:
+        max_score, best_model_filename = max(
+            ((float(f.split("_dice_")[1][:-4]), f) for f in pth_files if "_dice_" in f),
+            default=(None, None)
+        )
+        print("max_score: ", max_score)
+    iteration_number = 0
+    # print(pth_files)
+    if not pth_files:
+        print("No .pth files found in the snapshot path.")
+#         model = create_model()
+    else:        
+        # 파일들을 수정된 시간을 기준으로 정렬
+        pth_files.sort(key=lambda x: os.path.getmtime(os.path.join(snapshot_path, x)), reverse=True)
+
+        # 정렬된 파일 중 가장 첫 번째 파일 (가장 최근에 저장된 파일) 선택
+        latest_file = pth_files[0]
+        if "best_model.pth" in latest_file:
+            latest_file = pth_files[1]
+        print("The latest file name:", latest_file)
+        save_mode_path = os.path.join(snapshot_path, latest_file)#'iter_10000_dice_0.7169.pth')
+
+    #     net.load_state_dict(torch.load(save_mode_path))
+        checkpoint = torch.load(save_mode_path)#["state_dict"]
+
+        for key in list(checkpoint.keys()):
+            if 'module.' in key:
+                checkpoint[key.replace('module.','')] = checkpoint[key]
+                del checkpoint[key]
+
+        model.load_state_dict(checkpoint, strict=False)
+        prefix = "model_iter_"
+        suffix = ".pth"
+        
+        if prefix in latest_file and latest_file.endswith(suffix):
+            start_index = latest_file.index(prefix) + len(prefix)
+            end_index = latest_file.index(suffix, start_index)
+#             print(latest_file[start_index:end_index])
+            if 'dice' in latest_file[start_index:end_index]:
+                end_index = latest_file.index('_dice_',start_index)
+            iteration_number = int(latest_file[start_index:end_index]) 
+
+        print("init weight from {}".format(save_mode_path))
+        
     if len(args.gpu.split(',')) > 1:
         model = nn.DataParallel(model).to(device)
     else :
@@ -214,8 +260,21 @@ def train(args, snapshot_path):
         random.seed(args.seed + worker_id)
 
 
-
-    train_transforms = Compose(
+    train_transforms1 = Compose(
+        [
+            LoadImaged(keys=["image", "label"]),
+            EnsureChannelFirstd(keys=["image", "label"]),
+            Orientationd(keys=["image", "label"], axcodes="RAI"),       #ALI
+            Spacingd(
+                keys=["image", "label"],
+                pixdim=(0.8,0.8,0.8),
+                mode=("bilinear", "nearest"),
+            ),
+#             CenterSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128)),
+            RandSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128), random_size=False),
+        ]
+    )
+    train_transforms2 = Compose(
         [
             LoadImaged(keys=["image", "label"]),
             EnsureChannelFirstd(keys=["image", "label"]),
@@ -230,26 +289,104 @@ def train(args, snapshot_path):
             RandFlipd(
                 keys=["image", "label"],
                 spatial_axis=[0],
-                prob=0.10,
+                prob=1.0,
             ),
+        ]
+    )
+    train_transforms3 = Compose(
+        [
+            LoadImaged(keys=["image", "label"]),
+            EnsureChannelFirstd(keys=["image", "label"]),
+            Orientationd(keys=["image", "label"], axcodes="RAI"),       #ALI
+            Spacingd(
+                keys=["image", "label"],
+                pixdim=(0.8,0.8,0.8),
+                mode=("bilinear", "nearest"),
+            ),
+#             CenterSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128)),
+            RandSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128), random_size=False),#roi_size=(272,272,144), random_size=False),
             RandFlipd(
                 keys=["image", "label"],
                 spatial_axis=[1],
-                prob=0.10,
+                prob=1.0,
             ),
+
+        ]
+    )
+    train_transforms4 = Compose(
+        [
+            LoadImaged(keys=["image", "label"]),
+            EnsureChannelFirstd(keys=["image", "label"]),
+            Orientationd(keys=["image", "label"], axcodes="RAI"),       #ALI
+            Spacingd(
+                keys=["image", "label"],
+                pixdim=(0.8,0.8,0.8),
+                mode=("bilinear", "nearest"),
+            ),
+#             CenterSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128)),
+            RandSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128), random_size=False),#roi_size=(272,272,144), random_size=False),
             RandFlipd(
                 keys=["image", "label"],
                 spatial_axis=[2],
-                prob=0.10,
+                prob=1.0,
             ),
+        ]
+    )
+    train_transforms5 = Compose(
+        [
+            LoadImaged(keys=["image", "label"]),
+            EnsureChannelFirstd(keys=["image", "label"]),
+            Orientationd(keys=["image", "label"], axcodes="RAI"),       #ALI
+            Spacingd(
+                keys=["image", "label"],
+                pixdim=(0.8,0.8,0.8),
+                mode=("bilinear", "nearest"),
+            ),
+#             CenterSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128)),
+            RandSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128), random_size=False),#roi_size=(272,272,144), random_size=False),
             RandRotate90d(
                 keys=["image", "label"],
-                prob=0.10,
+                prob=1.0,
                 max_k=3,
             ),
 
         ]
     )
+#     train_transforms = Compose(
+#         [
+#             LoadImaged(keys=["image", "label"]),
+#             EnsureChannelFirstd(keys=["image", "label"]),
+#             Orientationd(keys=["image", "label"], axcodes="RAI"),       #ALI
+#             Spacingd(
+#                 keys=["image", "label"],
+#                 pixdim=(0.8,0.8,0.8),
+#                 mode=("bilinear", "nearest"),
+#             ),
+# #             CenterSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128)),
+#             RandSpatialCropd(keys=['image', 'label'], roi_size=(256,256,128), random_size=False),#roi_size=(272,272,144), random_size=False),
+#             RandFlipd(
+#                 keys=["image", "label"],
+#                 spatial_axis=[0],
+#                 prob=0.10,
+#             ),
+#             RandFlipd(
+#                 keys=["image", "label"],
+#                 spatial_axis=[1],
+#                 prob=0.10,
+#             ),
+#             RandFlipd(
+#                 keys=["image", "label"],
+#                 spatial_axis=[2],
+#                 prob=0.10,
+#             ),
+#             RandRotate90d(
+#                 keys=["image", "label"],
+#                 prob=0.10,
+#                 max_k=3,
+#             ),
+
+#         ]
+#     )
     val_transforms = Compose(
         [
             LoadImaged(keys=["image", "label"]),
@@ -290,19 +427,47 @@ def train(args, snapshot_path):
         for file_info in val_files:
             file_info['label'] = file_info['label'].replace('/label_trim/', '/label_multi_trim/')
 
+    # train_transforms 버전 설정 (예시로 3개의 버전 생성)
+    train_transforms_list = [
+        train_transforms1,
+        train_transforms2,
+        train_transforms3,
+        train_transforms4,
+        train_transforms5
+        # 추가적인 버전이 있다면 계속해서 추가 가능
+    ]
 
     ##########train dataload
-    db_train_SL = CacheDataset(
-        data=train_files,
-        transform=train_transforms,
-        cache_num=24,
-        cache_rate=1.0,
-        num_workers=8,
-    )
+    # 각각의 데이터셋 생성
+    dataset_list = []
+    for transform in train_transforms_list:
+        db_train_SL_tmp = CacheDataset(
+            data=train_files,
+            transform=transform,
+            cache_num=24,
+            cache_rate=1.0,
+            num_workers=8,
+        )
+        dataset_list.append(db_train_SL_tmp)
+
+    # 데이터셋을 결합(concatenate)
+    db_train_SL = ConcatDataset(dataset_list)
 
 
     SL_trainloader = DataLoader(db_train_SL, batch_size=args.batch_size,shuffle=True,
-                             num_workers=4, pin_memory=True, worker_init_fn=worker_init_fn)  ## 40개 안에서 shuffle
+                             num_workers=4, pin_memory=True, worker_init_fn=worker_init_fn)
+#     ##########train dataload
+#     db_train_SL = CacheDataset(
+#         data=train_files,
+#         transform=train_transforms,
+#         cache_num=24,
+#         cache_rate=1.0,
+#         num_workers=8,
+#     )
+
+
+#     SL_trainloader = DataLoader(db_train_SL, batch_size=args.batch_size,shuffle=True,
+#                              num_workers=4, pin_memory=True, worker_init_fn=worker_init_fn)  ## 40개 안에서 shuffle
 
 
 
@@ -318,10 +483,12 @@ def train(args, snapshot_path):
 
     optimizer1 = optim.SGD(model.parameters(), lr=base_lr,
                            momentum=0.9, weight_decay=0.0001)
-    # 학습률 스케줄러 설정
-#     scheduler = lr_scheduler.StepLR(optimizer1, step_size=3000, gamma=0.1)
     # 가중치를 동적으로 조절할 스케줄러를 생성
 #     scheduler = lr_scheduler.LambdaLR(optimizer1, lr_lambda=weight_scheduler)
+
+    # 학습률 스케줄러 설정
+#     scheduler = lr_scheduler.StepLR(optimizer1, step_size=3000, gamma=0.1)
+        
     loss_weight = initial_weight#0.1
     class_weights = []
     if args.use_weightloss != 0: # 0: cee+dice, 1: cee+w_dice, 2: w_cee+w_dice
@@ -369,16 +536,17 @@ def train(args, snapshot_path):
     writer = SummaryWriter(snapshot_path + '/log')
     #logging.info("{} iterations per epoch".format(len(trainloader)))
 
-    iter_num = 0
-    max_epoch = max_iterations // len(SL_trainloader) + 1
-    best_performance1 = 0.0
-    best_performance2 = 0.0
+    iter_num = iteration_number#0
+    max_epoch = (max_iterations-iteration_number) // len(SL_trainloader) + 1
+    best_performance1 = max_score#0.0
+#     best_performance2 = 0.0
     iterator = tqdm(range(max_epoch), ncols=70)
     kl_distance = nn.KLDivLoss(reduction='none')
     lr_ = base_lr
     
     for epoch_num in iterator:
         for i_batch, sampled_batch in enumerate(SL_trainloader):       #0,1 : SL_trainloader(bs:1), UL_trainloader(bs:1)
+            nb_mc = 10
             volume_batch, label_batch = sampled_batch['image'].cuda(), sampled_batch['label'].cuda()
             '''
             plt.figure(figsize=(18, 18))
@@ -399,61 +567,53 @@ def train(args, snapshot_path):
             
             # 학습을 진행하면서 스케줄러에 따라 가중치 조절
 #             scheduler.step()
+            
             # 학습률 업데이트
 #             scheduler.step()
+            
             # 가중치 업데이트
 #             loss_weight = weight_scheduler(epoch_num)
 #             loss_weight = min(1, loss_weight)
 
-#             output = model(volume_batch)        # 2,1,176,176,176 -> 2,2,176,176,176
-#             output_soft = torch.softmax(output, dim=1)
-            mu, log_var = model(volume_batch)        # 2,1,176,176,176 -> 2,2,176,176,176
-            
-            
-            mu_mc = mu.unsqueeze(-1).repeat(1, 1, 1, 1, 1, nb_mc)
-            std_mc = torch.exp(log_var).unsqueeze(-1).repeat(1, 1, 1, 1, 1, nb_mc)
-
-#             mu_mc = mu[:,1,...].unsqueeze(-1).repeat(1, 1, 1, 1, 1, nb_mc)
-#             std = torch.exp(log_var)
-            #print(std.shape,"chch")
-            #print(std[:,1,...].unsqueeze(-1).repeat(1,1,1,1,nb_mc).shape)
-            
-            # Hard coded the known shape of the data
+            outputs_aux1, outputs_aux2, outputs_aux3, outputs_aux4, log_alea_aux1, log_alea_aux2, log_alea_aux3, log_alea_aux4  = model(volume_batch)
+            mu = torch.stack((outputs_aux1, outputs_aux2, outputs_aux3, outputs_aux4),dim=-1)
+            epistemic = torch.var(mu, dim=-1)
+            mu = torch.mean(mu, dim=-1)
+            aleatoric = torch.stack((torch.exp(log_alea_aux1), torch.exp(log_alea_aux2), torch.exp(log_alea_aux3), torch.exp(log_alea_aux4)),dim=-1)
+            aleatoric = torch.mean(aleatoric, dim=-1)
             noise = torch.randn(batch_size, 2, 256, 256, 128, nb_mc).cuda()
-
-            reparameterized_output = mu_mc + noise * std_mc
-
-#            print('ccc', reparameterized_output.shape)
-#            print(label_batch.squeeze(1).unsqueeze(-1).shape)
-#             print("label_batch.shape:",label_batch.shape) # label_batch.shape: torch.Size([2, 1, 256, 256, 128])
-            
-#             print("reparameterized_output.shape:",reparameterized_output.shape) # torch.Size([2, 2, 256, 256, 128, 10])
-
+            reparameterized_output = (mu.unsqueeze(-1).repeat(1, 1, 1, 1, 1, nb_mc)) + noise * (aleatoric.unsqueeze(-1).repeat(1, 1, 1, 1, 1, nb_mc))
             y_tru = label_batch.unsqueeze(-1).repeat(1, 1, 1, 1, 1, nb_mc)
-#             print("y_tru.shape:",y_tru.shape) # label_batch.shape: torch.Size([2, 1, 256, 256, 128])
-#            print(y_tru.shape)
             mc_x = ce_loss(reparameterized_output, y_tru.squeeze(1).long())
-            # Mean across mc samples
             mc_x = torch.mean(mc_x, dim=-1)
-            # Mean across everything else
             attenuated_ce_loss = torch.mean(mc_x)
-#             output_soft = torch.softmax(reparameterized_output, dim=1)  # dice loss에 영향을 줌
-            output_soft = torch.softmax(mu, dim=1)
-#             print("mu.shape:",mu.shape)
-#             print("y_tru.shape:",y_tru.shape)
-#             print("output_soft.shape:",output_soft.shape)
-#             print("label_batch.shape:",label_batch.shape)
-            
-#             print('hd_loss:', hd_loss(output_soft[:, 1, ...].unsqueeze(1), label_batch))
-            ##supervised :dice CE
-#             loss = ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights) + (0.1 * hd_loss(output_soft[:, 1, ...].unsqueeze(1), label_batch))
-            
+            outputs_soft = torch.softmax(mu, dim=1)
+            loss = attenuated_ce_loss + dice_loss(outputs_soft, label_batch.float()) + torch.mean(epistemic)
+#             outputs_aux1_soft = torch.softmax(outputs_aux1, dim=1)
+#             outputs_aux2_soft = torch.softmax(outputs_aux2, dim=1)
+#             outputs_aux3_soft = torch.softmax(outputs_aux3, dim=1)
+#             outputs_aux4_soft = torch.softmax(outputs_aux4, dim=1)
+#             loss_ce_aux1 = ce_loss(outputs_aux1,
+#                                    label_batch.squeeze(1).long())
+#             loss_ce_aux2 = ce_loss(outputs_aux2,
+#                                    label_batch.squeeze(1).long())
+#             loss_ce_aux3 = ce_loss(outputs_aux3,
+#                                    label_batch.squeeze(1).long())
+#             loss_ce_aux4 = ce_loss(outputs_aux4,
+#                                    label_batch.squeeze(1).long())
+
+#             loss_dice_aux1 = dice_loss(
+#                 outputs_aux1_soft, label_batch.float())
+#             loss_dice_aux2 = dice_loss(
+#                 outputs_aux2_soft, label_batch.float())
+#             loss_dice_aux3 = dice_loss(
+#                 outputs_aux3_soft, label_batch.float())
+#             loss_dice_aux4 = dice_loss(
+#                 outputs_aux4_soft, label_batch.float())
+
+#             loss = (loss_ce_aux1+loss_ce_aux2+loss_ce_aux3+loss_ce_aux4 +
+#                                loss_dice_aux1+loss_dice_aux2+loss_dice_aux3+loss_dice_aux4)/8
 #             loss = ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights)
-#             loss = attenuated_ce_loss + dice_loss(output_soft, y_tru, weight=class_weights)  # dice loss에 영향을 줌
-            loss = attenuated_ce_loss + dice_loss(output_soft, label_batch, weight=class_weights)
-            # cross-entropy 는 실제 값과 예측값의 차이 (dissimilarity) 를 계산
-#             print("loss", loss.shape, loss)
-#             print("original loss", (ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights)).shape, ce_loss(output, label_batch.squeeze(1).long()) + dice_loss(output_soft, label_batch, weight=class_weights))
 
 
             optimizer1.zero_grad()
@@ -466,7 +626,7 @@ def train(args, snapshot_path):
             
             writer.add_scalar('lr', lr_, iter_num)
             writer.add_scalar('loss/supervised_loss',
-                              loss.data.item(), iter_num)  # .data.item()이랑 .item()이랑 비교해보기
+                              loss.item(), iter_num)  # .data.item()이랑 .item()이랑 비교해보기
 
 #             wandb.log({
 #                 "iter": iter_num,
@@ -554,3 +714,5 @@ if __name__ == "__main__":
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
     logging.info(str(args))
     train(args, snapshot_path)
+
+

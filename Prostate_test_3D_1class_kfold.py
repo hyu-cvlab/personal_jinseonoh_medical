@@ -92,7 +92,7 @@ def Inference(args,device):
         db_val, batch_size=1, shuffle=False, num_workers=4, pin_memory=True
     )
     
-    directory_path = "/data/hanyang_Prostate/50_example/trim/sl_data_wo_norm/centerCrop_350_350_200/label_trim/"
+    directory_path = "/data/hanyang_Prostate/50_example/additional_data/label_trim/"
     mask_voxel_counts = []
     pixel_spacing_xs = []
     pixel_spacing_ys = []
@@ -128,7 +128,7 @@ def Inference(args,device):
 
     if args.class_name == 1:
 #         test_save_path = "/data/sohui/Prostate/prostate_1c_test_result/{}/{}".format(args.exp, args.model)
-        test_save_path = "/data/hanyang_Prostate/Prostate/prostate_1c_test_result/{}/{}/{}".format(args.exp, args.model, args.phase)
+        test_save_path = "/data/hanyang_Prostate/Prostate/prostate_1c_test_result/{}/{}/{}".format("test_additional_data", args.model, args.phase)
     elif args.class_name == 2:
 #         test_save_path = "/data/sohui/Prostate/TZ_1c_test_result/{}/{}".format(args.exp, args.model)
         test_save_path = "/data/hanyang_Prostate/Prostate/TZ_1c_test_result/{}/{}/{}".format(args.exp, args.model, args.phase)
@@ -146,7 +146,7 @@ def Inference(args,device):
         net = Attention_UNet(in_channels=1, n_classes=num_classes, is_batchnorm=True)
 
     elif "unetr" in args.model:
-        model = UNETR(in_channels=1, out_channels=num_classes, img_size=(256,256,128), feature_size=16, hidden_size=768, mlp_dim=3072, num_heads=12, pos_embed="perceptron", norm_name="instance", res_block=True, conv_block=True, dropout_rate=0.0)
+        net = UNETR(in_channels=1, out_channels=num_classes, img_size=(256,256,128), feature_size=16, hidden_size=768, mlp_dim=3072, num_heads=12, pos_embed="perceptron", norm_name="instance", res_block=True, conv_block=True, dropout_rate=0.0)
         
     else:
         pass
@@ -203,7 +203,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--root_path', type=str,
 #                         default='/data/sohui/Prostate/data/trim/ssl_data/centerCrop_200', help='Name of Experiment')
-                        default='/data/hanyang_Prostate/50_example/trim/sl_data_wo_norm/centerCrop_350_350_200', help='Name of Experiment')
+                        default='/data/hanyang_Prostate/50_example/additional_data/', help='Name of Experiment')
     parser.add_argument('--exp', type=str,
                         default='SSL/MT_ATO_350_350_200_rampup_refpaper', help='experiment_name')
     parser.add_argument('--model', type=str,

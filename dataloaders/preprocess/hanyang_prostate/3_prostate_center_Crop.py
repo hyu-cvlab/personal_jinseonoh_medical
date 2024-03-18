@@ -124,14 +124,14 @@ for k in range(len(data_file_list)):
 
     ## crop center
     ct,mask = CenterCrop(ct,mask,output_size=[200,350,350])
-    morph_mask = dilate_erode_3d(mask)
+    morph_mask = dilate_erode_3d(mask, iterations=5)
     morph_mask = (morph_mask > 0).astype(np.uint8)  # 이진화 및 데이터 타입 변경
 
 
     print('{}, d:{}, w:{}, h:{}'.format(data_file_list[k], ct.shape[0], ct.shape[1], ct.shape[2]))
 
-    c_path = '/data/hanyang_Prostate/50_example/trim/sl_data_wo_norm_morphology/centerCrop_350_350_200/image'
-    m_path = '/data/hanyang_Prostate/50_example/trim/sl_data_wo_norm_morphology/centerCrop_350_350_200/label_trim'#'/home/psh/data/hanyang_Prostate/50_example/trim/ssl_data/centerCrop_200/label_trim'
+    c_path = '/data/hanyang_Prostate/50_example/trim/sl_data_wo_norm_morphology_5/centerCrop_350_350_200/image'
+    m_path = '/data/hanyang_Prostate/50_example/trim/sl_data_wo_norm_morphology_5/centerCrop_350_350_200/label_trim'#'/home/psh/data/hanyang_Prostate/50_example/trim/ssl_data/centerCrop_200/label_trim'
 
     if not os.path.exists(c_path):
         os.makedirs(c_path)

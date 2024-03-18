@@ -4,7 +4,7 @@ import shutil
 import numpy as np
 import torch
 from networks.vnet import VNet
-from Prostate_test_3D_util import test_all_case
+from Prostate_test_3D_util_unlabel import test_all_case
 import torch.nn as nn
 
 
@@ -30,21 +30,21 @@ from monai.data import (
 def Inference(args,device):
     val_transforms = Compose(
         [
-            LoadImaged(keys=["image", "label"]),
-            EnsureChannelFirstd(keys=["image", "label"]),
-            Orientationd(keys=["image", "label"], axcodes="RAI"),   #LPS ->
+            LoadImaged(keys=["image"]),
+            EnsureChannelFirstd(keys=["image"]),
+            Orientationd(keys=["image"], axcodes="RAI"),   #LPS ->
             Spacingd(
-                keys=["image", "label"],
+                keys=["image"],
                 pixdim=(0.8,0.8,0.8),
-                mode=("bilinear", "nearest"),
+                mode=("bilinear"),
             ),
-            #CenterSpatialCropd(keys=['image', 'label'], roi_size=(176,176,176)),
+            CenterSpatialCropd(keys=['image'], roi_size=(256,256,128)),
             #SpatialPadd(keys=["image", "label"], spatial_size=(320, 320, 32), mode="constant"),
         ]
     )
 
     if args.class_name == 1:
-        datasets = args.root_path + "/dataset_fold_testjinjin.json"
+        datasets = args.root_path + "/dataset_unlabeled.json"
         print("total_prostate train : dataset.json")
     if args.class_name == 2:
         datasets = args.root_path + "/dataset_2.json"
@@ -87,7 +87,7 @@ def Inference(args,device):
         net = net.cuda()
 
     save_mode_path = os.path.join(
-        snapshot_path, 'model_iter_22000_dice_0.8866.pth')
+        snapshot_path, 'model_iter_9000_dice_0.8895.pth')
 
 #     net.load_state_dict(torch.load(save_mode_path))
     checkpoint = torch.load(save_mode_path)#["state_dict"]
@@ -101,18 +101,18 @@ def Inference(args,device):
 
     print("init weight from {}".format(save_mode_path))
     net.eval()
-    metric, dice_list,jacc_list, hd_list, ASD_list = test_all_case(net, val_loader =val_loader, val_files=val_files, method=args.model, num_classes=num_classes,
+    _none = test_all_case(net, val_loader =val_loader, val_files=val_files, method=args.model, num_classes=num_classes,
                                patch_size=args.patch_size, stride_xy=64, stride_z=64, save_result=True, test_save_path=test_save_path,
                                metric_detail=args.detail,nms=args.nms)
 
-    return metric, dice_list,jacc_list, hd_list, ASD_list
+    return _none#metric, dice_list,jacc_list, hd_list, ASD_list
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--root_path', type=str,
 #                         default='/data/sohui/Prostate/data/trim/ssl_data/centerCrop_200', help='Name of Experiment')
-                        default='/data/hanyang_Prostate/50_example/trim/sl_data/centerCrop_350_350_200', help='Name of Experiment')
+                        default='/data/hanyang_Prostate/50_example/trim/ssl_data/centerCrop_200_wo_norm_morphology_5', help='Name of Experiment')
     parser.add_argument('--exp', type=str,
                         default='SSL/MT_ATO_350_350_200_rampup_refpaper', help='experiment_name')
     parser.add_argument('--model', type=str,
@@ -135,14 +135,14 @@ if __name__ == '__main__':
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    metric, dice_list,jacc_list, hd_list, ASD_list = Inference(args, device=device)
-    for i in range((args.num_classes)-1):
-        print('class:{}'.format(i+1))
-        print('dice_mean:{}'.format(np.mean(dice_list[i])))
-        #print('dice_std:{}'.format(np.std(dice_list[i])))
-        print('jacc_mean:{}'.format(np.mean(jacc_list[i])))
-        # print('jacc_std:{}'.format(np.std(jacc_list[i])))
-        print('HD_mean:{}'.format(np.mean(hd_list[i])))
-        #print('HD_std:{}'.format(np.std(hd_list[i])))
-        print('ASD_mean:{}'.format(np.mean(ASD_list[i])))
-        # print('ASD_std:{}'.format(np.std(ASD_list[i])))
+    _none = Inference(args, device=device)
+#     for i in range((args.num_classes)-1):
+#         print('class:{}'.format(i+1))
+#         print('dice_mean:{}'.format(np.mean(dice_list[i])))
+#         #print('dice_std:{}'.format(np.std(dice_list[i])))
+#         print('jacc_mean:{}'.format(np.mean(jacc_list[i])))
+#         # print('jacc_std:{}'.format(np.std(jacc_list[i])))
+#         print('HD_mean:{}'.format(np.mean(hd_list[i])))
+#         #print('HD_std:{}'.format(np.std(hd_list[i])))
+#         print('ASD_mean:{}'.format(np.mean(ASD_list[i])))
+#         # print('ASD_std:{}'.format(np.std(ASD_list[i])))
