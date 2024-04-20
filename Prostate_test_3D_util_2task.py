@@ -10,7 +10,7 @@ from medpy import metric
 from skimage.measure import label
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-# from utils.util import compute_sdf
+from utils.util import compute_sdf
 
 
 
@@ -70,7 +70,7 @@ def test_single_case(net, image, stride_xy, stride_z, patch_size, num_classes=1,
                 test_patch = torch.from_numpy(test_patch).cuda()
 
                 with torch.no_grad():
-                    y1, _ = net(test_patch)
+                    y1, sdf = net(test_patch)
                     # ensemble
                     y = torch.softmax(y1, dim=1)
                 y = y.cpu().data.numpy()
@@ -87,7 +87,7 @@ def test_single_case(net, image, stride_xy, stride_z, patch_size, num_classes=1,
                               hl_pad:hl_pad+h, dl_pad:dl_pad+d]
         score_map = score_map[:, wl_pad:wl_pad +
                               w, hl_pad:hl_pad+h, dl_pad:dl_pad+d]
-    return label_map
+    return label_map, sdf[:,0,...].squeeze().cpu().data.numpy()
 
 
 def cal_metric(gt, pred):
@@ -131,9 +131,10 @@ def test_all_case(net, val_loader,val_files, method="unet_3D", num_classes=4, pa
             '''
 
 
-            prediction = test_single_case(
+            prediction, sdf = test_single_case(
                 net, image, stride_xy, stride_z, patch_size, num_classes=num_classes, model_name=model_name)
-
+            print("jinijn check sdf:::::", sdf.shape)
+            print("jinijn check prediction:::::", prediction.shape)
 
             if nms:
                 prediction = getLargestCC(prediction)
@@ -171,8 +172,11 @@ def test_all_case(net, val_loader,val_files, method="unet_3D", num_classes=4, pa
                 nib.save(lab_nii, test_save_path + "/{}_{}_gt.nii.gz".format(ith, name[:11]))
                 '''
                 prediction = np.transpose(prediction, (2,1,0))
+                print("jinijn check prediction2:::::", prediction.shape)
+
                 image = np.transpose(image, (2,1,0))
                 label = np.transpose(label, (2,1,0))
+                sdf = np.transpose(sdf, (2,1,0))
 
 
                 pred_itk = sitk.GetImageFromArray(prediction.astype(np.uint8))
@@ -205,6 +209,11 @@ def test_all_case(net, val_loader,val_files, method="unet_3D", num_classes=4, pa
                     lab_itk.SetSpacing((0.8 ,0.8 ,0.8))
                 sitk.WriteImage(lab_itk, test_save_path +
                                 "/{}_{}_gt.nii.gz".format(ith,name[:11]))
+                
+                sdf_itk = sitk.GetImageFromArray(sdf)
+                sdf_itk.SetSpacing((0.8,0.8,0.8))
+                sitk.WriteImage(sdf_itk, test_save_path + "/{}_{}_sdf.nii.gz".format(ith, name[:11]))
+
 
 
             ith += 1
